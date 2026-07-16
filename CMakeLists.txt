@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.16)
 project(ORB_SLAM3)
 
 IF(NOT CMAKE_BUILD_TYPE)
@@ -30,9 +30,9 @@ endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
-find_package(OpenCV 4.4)
+find_package(OpenCV 4.2)
    if(NOT OpenCV_FOUND)
-      message(FATAL_ERROR "OpenCV > 4.4 not found.")
+      message(FATAL_ERROR "OpenCV >= 4.2 not found.")
    endif()
 
 MESSAGE("OPENCV VERSION:")
@@ -115,12 +115,44 @@ include/Settings.h)
 
 add_subdirectory(Thirdparty/g2o)
 
+# Thirdparty: AprilTag
+option(ORB_SLAM3_WITH_APRILTAG "Build and link AprilTag detection library" ON)
+if(ORB_SLAM3_WITH_APRILTAG)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(BUILD_PYTHON_WRAPPER OFF CACHE BOOL "" FORCE)
+    add_subdirectory(Thirdparty/apriltag)
+endif()
+
+# Thirdparty: GTSAM (use 4.2.2 for compatibility with CMake 3.16)
+option(ORB_SLAM3_WITH_GTSAM "Build and link GTSAM optimization library" ON)
+if(ORB_SLAM3_WITH_GTSAM)
+    set(GTSAM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GTSAM_BUILD_EXAMPLES_ALWAYS OFF CACHE BOOL "" FORCE)
+    set(GTSAM_BUILD_TIMING_ALWAYS OFF CACHE BOOL "" FORCE)
+    set(GTSAM_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+    set(GTSAM_BUILD_UNSTABLE OFF CACHE BOOL "" FORCE)
+    set(GTSAM_USE_SYSTEM_EIGEN ON CACHE BOOL "" FORCE)
+    add_subdirectory(Thirdparty/gtsam-4.2.2)
+endif()
+
+set(ORB_SLAM3_THIRDPARTY_LIBS
+    ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+    ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+)
+if(ORB_SLAM3_WITH_APRILTAG)
+    list(APPEND ORB_SLAM3_THIRDPARTY_LIBS apriltag)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_APRILTAG)
+endif()
+if(ORB_SLAM3_WITH_GTSAM)
+    list(APPEND ORB_SLAM3_THIRDPARTY_LIBS gtsam)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_GTSAM)
+endif()
+
 target_link_libraries(${PROJECT_NAME}
 ${OpenCV_LIBS}
 ${EIGEN3_LIBS}
 ${Pangolin_LIBRARIES}
-${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
-${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
+${ORB_SLAM3_THIRDPARTY_LIBS}
 -lboost_serialization
 -lcrypto
 )
