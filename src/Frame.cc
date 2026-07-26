@@ -26,7 +26,12 @@
 #include "ORBmatcher.h"
 #include "GeometricCamera.h"
 
+#ifdef HAS_APRILTAG
+#include "ua_tag/AprilTagDetector.h"
+#endif
+
 #include <thread>
+#include <utility>
 #include <include/CameraModels/Pinhole.h>
 #include <include/CameraModels/KannalaBrandt8.h>
 
@@ -42,7 +47,7 @@ float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
 //For stereo fisheye matching
 cv::BFMatcher Frame::BFmatcher = cv::BFMatcher(cv::NORM_HAMMING);
 
-Frame::Frame(): mpcpi(NULL), mpImuPreintegrated(NULL), mpPrevFrame(NULL), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mbHasPose(false), mbHasVelocity(false)
+Frame::Frame(): mpcpi(NULL), mpImuPreintegrated(NULL), mpPrevFrame(NULL), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false)
 {
 #ifdef REGISTER_TIMES
     mTimeStereoMatch = 0;
@@ -70,7 +75,8 @@ Frame::Frame(const Frame &frame)
      monoLeft(frame.monoLeft), monoRight(frame.monoRight), mvLeftToRightMatch(frame.mvLeftToRightMatch),
      mvRightToLeftMatch(frame.mvRightToLeftMatch), mvStereo3Dpoints(frame.mvStereo3Dpoints),
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
-     mTcw(frame.mTcw), mbHasPose(false), mbHasVelocity(false)
+     mTcw(frame.mTcw), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false),
+     mTagFrameData(frame.mTagFrameData)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
@@ -82,6 +88,9 @@ Frame::Frame(const Frame &frame)
 
     if(frame.mbHasPose)
         SetPose(frame.GetPose());
+
+    if(frame.HasTagPose())
+        SetTagPose(frame.GetTagPose());
 
     if(frame.HasVelocity())
     {
@@ -101,7 +110,7 @@ Frame::Frame(const Frame &frame)
 Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, Frame* pPrevF, const IMU::Calib &ImuCalib)
     :mpcpi(NULL), mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
-     mpCamera(pCamera) ,mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
+     mpCamera(pCamera) ,mpCamera2(nullptr), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false)
 {
     // Frame ID
     mnId=nNextId++;
@@ -201,7 +210,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
     :mpcpi(NULL),mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
-     mpCamera(pCamera),mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
+     mpCamera(pCamera),mpCamera2(nullptr), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false)
 {
     // Frame ID
     mnId=nNextId++;
@@ -286,11 +295,11 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
 }
 
 
-Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib)
+Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib, ua_tag::AprilTagDetector* pTagDetector)
     :mpcpi(NULL),mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(static_cast<Pinhole*>(pCamera)->toK()), mK_(static_cast<Pinhole*>(pCamera)->toK_()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL),mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera),
-     mpCamera2(nullptr), mbHasPose(false), mbHasVelocity(false)
+     mpCamera2(nullptr), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false)
 {
     // Frame ID
     mnId=nNextId++;
@@ -315,6 +324,8 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
     mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndExtORB - time_StartExtORB).count();
 #endif
 
+    // AprilTag corner detection (independent of ORB feature count)
+    DetectAndStoreTags(pTagDetector, imGray);
 
     N = mvKeys.size();
     if(mvKeys.empty())
@@ -382,6 +393,27 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
 }
 
 
+void Frame::DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &im)
+{
+    mTagFrameData.Clear();
+
+#ifdef HAS_APRILTAG
+    if(!pTagDetector)
+        return;
+
+    std::vector<tag::TagObservation> observations;
+    if(pTagDetector->DetectCorners(im, observations))
+    {
+        for(size_t i = 0; i < observations.size(); ++i)
+            mTagFrameData.Add(std::move(observations[i]));
+    }
+#else
+    (void)pTagDetector;
+    (void)im;
+#endif
+}
+
+
 void Frame::AssignFeaturesToGrid()
 {
     // Fill matrix with points
@@ -434,6 +466,15 @@ void Frame::SetPose(const Sophus::SE3<float> &Tcw) {
     UpdatePoseMatrices();
     mbIsSet = true;
     mbHasPose = true;
+}
+
+void Frame::SetTagPose(const Sophus::SE3<float> &Tcw) {
+    mTcwTag = Tcw;
+    mbHasTagPose = true;
+}
+
+void Frame::ClearTagPose() {
+    mbHasTagPose = false;
 }
 
 void Frame::SetNewBias(const IMU::Bias &b)
@@ -1034,7 +1075,7 @@ void Frame::setIntegrated()
 Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Sophus::SE3f& Tlr,Frame* pPrevF, const IMU::Calib &ImuCalib)
         :mpcpi(NULL), mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)),  mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
          mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(pCamera2),
-         mbHasPose(false), mbHasVelocity(false)
+         mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false)
 
 {
     imgLeft = imLeft.clone();

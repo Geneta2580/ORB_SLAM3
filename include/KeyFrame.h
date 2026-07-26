@@ -31,6 +31,7 @@
 
 #include "GeometricCamera.h"
 #include "SerializationUtils.h"
+#include "ua_tag/TagFrameData.h"
 
 #include <mutex>
 
@@ -417,6 +418,9 @@ public:
     string mNameFile;
 
     int mnDataset;
+
+    // AprilTag observations copied from the source Frame at keyframe creation.
+    tag::TagFrameData mTagFrameData;
 
     std::vector <KeyFrame*> mvpLoopCandKFs;
     std::vector <KeyFrame*> mvpMergeCandKFs;

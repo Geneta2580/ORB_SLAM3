@@ -29,7 +29,18 @@
 #include "MLPnPsolver.h"
 #include "GeometricTools.h"
 
+#include "ua_tag/TagInitializer.h"
+#include "ua_tag/TagTracker.h"
+#include "ua_tag/TagMap.h"
+
+#ifdef HAS_APRILTAG
+#include "ua_tag/AprilTagDetector.h"
+#include "ua_tag/AprilTagVisualizer.h"
+#include "ua_tag/TagViewer.h"
+#endif
+
 #include <iostream>
+#include <cstdio>
 
 #include <mutex>
 #include <chrono>
@@ -41,12 +52,14 @@ namespace ORB_SLAM3
 {
 
 
-Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Atlas *pAtlas, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, const string &_nameSeq):
+Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Atlas *pAtlas, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, tag::TagMap* pTagMap, const string &_nameSeq):
     mState(NO_IMAGES_YET), mSensor(sensor), mTrackedFr(0), mbStep(false),
     mbOnlyTracking(false), mbMapUpdated(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB),
     mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
-    mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL))
+    mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL)),
+    mpAprilTagDetector(nullptr), mpTagInitializer(nullptr), mpTagTracker(nullptr), mpTagMap(pTagMap),
+    mpTagViewer(nullptr), mTagState(tag::TagTrackingState::NOT_INITIALIZED)
 {
     // Load camera parameters from settings file
     if(settings){
@@ -93,6 +106,39 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
             }
         }
     }
+
+#ifdef HAS_APRILTAG
+    try
+    {
+        mpAprilTagDetector = new ua_tag::AprilTagDetector(strSettingPath);
+    }
+    catch(const std::exception &e)
+    {
+        std::cerr << "WARNING: failed to init AprilTagDetector: " << e.what() << std::endl;
+        mpAprilTagDetector = nullptr;
+    }
+#endif
+    mpTagInitializer = new tag::TagInitializer(strSettingPath);
+    mpTagTracker = new tag::TagTracker(strSettingPath);
+
+#ifdef HAS_APRILTAG
+    {
+        cv::FileStorage fsTagViewer(strSettingPath, cv::FileStorage::READ);
+        int enable_tag_viewer = 0;
+        if(fsTagViewer.isOpened())
+        {
+            cv::FileNode node = fsTagViewer["Tag.viewer"];
+            if(!node.empty())
+                enable_tag_viewer = static_cast<int>(node);
+        }
+        if(enable_tag_viewer != 0)
+        {
+            mpTagViewer = new tag::TagViewer(strSettingPath);
+            mpTagViewer->Start();
+            std::cout << "TagViewer enabled (Tag.viewer=1)" << std::endl;
+        }
+    }
+#endif
 
     initID = 0; lastID = 0;
     mbInitWith3KFs = false;
@@ -530,6 +576,21 @@ Tracking::~Tracking()
 {
     //f_track_stats.close();
 
+#ifdef HAS_APRILTAG
+    if(mpTagViewer)
+    {
+        mpTagViewer->RequestFinish();
+        delete mpTagViewer;
+        mpTagViewer = nullptr;
+    }
+    delete mpAprilTagDetector;
+    mpAprilTagDetector = nullptr;
+#endif
+    delete mpTagInitializer;
+    mpTagInitializer = nullptr;
+    delete mpTagTracker;
+    mpTagTracker = nullptr;
+    mpTagMap = nullptr;  // owned by System
 }
 
 void Tracking::newParameterLoader(Settings *settings) {
@@ -1584,18 +1645,18 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     if (mSensor == System::MONOCULAR)
     {
         if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET ||(lastID - initID) < mMaxFrames)
-            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth);
+            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
         else
-            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth);
+            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
     }
     else if(mSensor == System::IMU_MONOCULAR)
     {
         if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
         {
-            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib);
+            mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
         }
         else
-            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib);
+            mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mpCamera,mDistCoef,mbf,mThDepth,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
     }
 
     if (mState==NO_IMAGES_YET)
@@ -1609,6 +1670,10 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
 #endif
 
     lastID = mCurrentFrame.mnId;
+
+    // Tag追踪
+    TagTrack();
+    // ORB追踪
     Track();
 
     return mCurrentFrame.GetPose();
@@ -1790,6 +1855,115 @@ void Tracking::ResetFrameIMU()
     // TODO To implement...
 }
 
+void Tracking::EstimateAndVisualizeTagPoses()
+{
+#ifdef HAS_APRILTAG
+    if(!mpAprilTagDetector || mCurrentFrame.mTagFrameData.Empty())
+        return;
+
+    ua_tag::CameraModel camera;
+    camera.fx = static_cast<double>(mK.at<float>(0, 0));
+    camera.fy = static_cast<double>(mK.at<float>(1, 1));
+    camera.cx = static_cast<double>(mK.at<float>(0, 2));
+    camera.cy = static_cast<double>(mK.at<float>(1, 2));
+    if(!mDistCoef.empty())
+        mDistCoef.convertTo(camera.dist_coeffs, CV_64F);
+
+    for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.left)
+        mpAprilTagDetector->EstimatePose(obs, camera, nullptr);
+    for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
+        mpAprilTagDetector->EstimatePose(obs, camera, nullptr);
+
+    // 存储Tag检测可视化结果
+    const std::string tagVisDir = "tag_vis";
+    if(ua_tag::EnsureDir(tagVisDir))
+    {
+        char visName[64];
+        std::snprintf(visName, sizeof(visName), "frame_%06lu.png", mCurrentFrame.mnId);
+        ua_tag::SaveTagsVis(mImGray, mCurrentFrame.mTagFrameData,
+                            tagVisDir + "/" + visName);
+    }
+#endif
+}
+
+void Tracking::TrackAndExpandTagMap()
+{
+    // TODO: Tag 跟踪成功后扩展地图
+}
+
+void Tracking::TagTrack()
+{
+#ifdef HAS_APRILTAG
+    // Frame 构造时已 DetectCorners；此处做 IPPE + 可视化，再跑独立 Tag 状态机
+    EstimateAndVisualizeTagPoses();
+#endif
+
+    switch(mTagState)
+    {
+    // 未初始化
+    case tag::TagTrackingState::NOT_INITIALIZED:
+    {
+        tag::TagInitializer::Result result;
+
+        if(!mpTagInitializer || !mpTagInitializer->TryInitialize(mCurrentFrame, result))
+        {
+            // 初始化失败
+            mTagState = tag::TagTrackingState::NOT_INITIALIZED;
+            mCurrentFrame.ClearTagPose();
+            break;
+        }
+
+        if(!mpTagMap || !mpTagMap->Initialize(result))
+        {
+            mTagState = tag::TagTrackingState::NOT_INITIALIZED;
+            mCurrentFrame.ClearTagPose();
+            break;
+        }
+
+        mTagState = tag::TagTrackingState::OK;
+        mCurrentFrame.SetTagPose(result.Tcw_current);
+        // 初始化成功后，更新TagTracker的last pose，并记录导出轨迹
+        if(mpTagTracker)
+        {
+            mpTagTracker->SeedLastPose(result.Tcw_current);
+            mpTagTracker->LogCameraPose(mCurrentFrame);
+        }
+        break;
+    }
+
+    // 已初始化
+    case tag::TagTrackingState::OK:
+    {
+        if(mpTagTracker && mpTagMap &&
+           mpTagTracker->Track(mCurrentFrame, *mpTagMap))
+        {
+            TrackAndExpandTagMap();
+        }
+        else
+        {
+            // 跟踪失败：退回未初始化，清空初始化帧缓存后重新初始化
+            if(mpTagInitializer)
+                mpTagInitializer->Clear();
+            if(mpTagTracker)
+                mpTagTracker->ClearMotionCache();
+            mTagState = tag::TagTrackingState::NOT_INITIALIZED;
+            mCurrentFrame.ClearTagPose();
+        }
+        break;
+    }
+    }
+
+#ifdef HAS_APRILTAG
+    // 每帧 Tag 流程结束后刷新独立 TagViewer（左检测图 / 右 Tag 地图）
+    if(mpTagViewer)
+    {
+        mpTagViewer->Update(
+            mImGray, mCurrentFrame.mTagFrameData, mCurrentFrame.HasTagPose(),
+            mCurrentFrame.HasTagPose() ? mCurrentFrame.GetTagPose() : Sophus::SE3f(),
+            mCurrentFrame.mnId, mpTagMap, mTagState);
+    }
+#endif
+}
 
 void Tracking::Track()
 {
@@ -4063,6 +4237,16 @@ int Tracking::GetNumberDataset()
 int Tracking::GetMatchesInliers()
 {
     return mnMatchesInliers;
+}
+
+void Tracking::SaveTagExports()
+{
+#ifdef HAS_APRILTAG
+    if(mpTagViewer)
+        mpTagViewer->RequestFinish();
+#endif
+    if(mpTagTracker && mpTagMap)
+        mpTagTracker->SaveExports(*mpTagMap);
 }
 
 void Tracking::SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder)

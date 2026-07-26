@@ -20,6 +20,7 @@
 
 #include "System.h"
 #include "Converter.h"
+#include "ua_tag/TagMap.h"
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
@@ -40,7 +41,7 @@ Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer, const int initFr, const string &strSequence):
-    mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
+    mSensor(sensor), mpTagMap(nullptr), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
     mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
 {
     // Output welcome message
@@ -177,6 +178,9 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         //usleep(10*1000*1000);
     }
 
+    // Create TagMap (empty; content filled after Tag tracking initializes)
+    cout << "Initialization of TagMap" << endl;
+    mpTagMap = new tag::TagMap(strSettingsFile);
 
     if (mSensor==IMU_STEREO || mSensor==IMU_MONOCULAR || mSensor==IMU_RGBD)
         mpAtlas->SetInertialSensor();
@@ -189,7 +193,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, mpTagMap, strSequence);
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
@@ -550,6 +554,13 @@ void System::Shutdown()
         Verbose::PrintMess("Atlas saving to file " + mStrSaveAtlasToFile, Verbose::VERBOSITY_NORMAL);
         SaveAtlas(FileType::BINARY_FILE);
     }
+
+    // 导出 TagMap 四角点与相机轨迹（需在 delete mpTagMap 之前）
+    if(mpTracker)
+        mpTracker->SaveTagExports();
+
+    delete mpTagMap;
+    mpTagMap = nullptr;
 
     /*if(mpViewer)
         pangolin::BindToContext("ORB-SLAM2: Map Viewer");*/
@@ -1381,6 +1392,11 @@ void System::ChangeDataset()
 float System::GetImageScale()
 {
     return mpTracker->GetImageScale();
+}
+
+Settings* System::GetSettings()
+{
+    return settings_;
 }
 
 #ifdef REGISTER_TIMES

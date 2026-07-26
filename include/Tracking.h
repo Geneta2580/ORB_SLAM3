@@ -39,6 +39,9 @@
 
 #include "GeometricCamera.h"
 
+#include "ua_tag/TagTracking.h"
+#include "ua_tag/TagInitializer.h"
+
 #include <mutex>
 #include <unordered_set>
 
@@ -53,13 +56,26 @@ class LoopClosing;
 class System;
 class Settings;
 
+namespace ua_tag
+{
+class AprilTagDetector;
+}  // namespace ua_tag
+
+namespace tag
+{
+class TagTracker;
+class TagMap;
+class TagViewer;
+}  // namespace tag
+
 class Tracking
 {  
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Atlas* pAtlas,
-             KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, const string &_nameSeq=std::string());
+             KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings,
+             tag::TagMap* pTagMap = nullptr, const string &_nameSeq=std::string());
 
     ~Tracking();
 
@@ -106,6 +122,9 @@ public:
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder="");
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, Map* pMap);
 
+    // 导出 TagMap 四角点与相机 TagPose 轨迹（Shutdown 前调用）
+    void SaveTagExports();
+
     float GetImageScale();
 
 #ifdef REGISTER_LOOP
@@ -130,6 +149,9 @@ public:
 
     eTrackingState mState;
     eTrackingState mLastProcessedState;
+
+    // Tag 跟踪状态（独立于 ORB mState）
+    tag::TagTrackingState mTagState;
 
     // Input sensor
     int mSensor;
@@ -197,6 +219,11 @@ protected:
     // Main tracking function. It is independent of the input sensor.
     void Track();
 
+    // Tag 跟踪入口：IPPE/可视化 + 独立 Tag 状态机（在 ORB Track 之前调用）
+    void TagTrack();
+    void EstimateAndVisualizeTagPoses();
+    void TrackAndExpandTagMap();
+
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
 
@@ -260,6 +287,15 @@ protected:
     //ORB
     ORBextractor* mpORBextractorLeft, *mpORBextractorRight;
     ORBextractor* mpIniORBextractor;
+
+    // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
+    ua_tag::AprilTagDetector* mpAprilTagDetector;
+
+    // Tag 独立跟踪模块（与 ORB Tracking 状态机分离）
+    tag::TagInitializer* mpTagInitializer;
+    tag::TagTracker* mpTagTracker;
+    tag::TagMap* mpTagMap;  // 非拥有；由 System 创建并持有
+    tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
 
     //BoW
     ORBVocabulary* mpORBVocabulary;

@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(ORB_SLAM3)
 
+# Generate compile_commands.json for IDE (clangd / C++ IntelliSense)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
@@ -12,20 +15,16 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
-# Check C++11 or C++0x support
+# C++17：ua_tag 使用 std::optional；其余模块保持兼容
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-if(COMPILER_SUPPORTS_CXX11)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
+if(COMPILER_SUPPORTS_CXX17)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+   add_definitions(-DCOMPILEDWITHC17)
    add_definitions(-DCOMPILEDWITHC11)
-   message(STATUS "Using flag -std=c++11.")
-elseif(COMPILER_SUPPORTS_CXX0X)
-   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-   add_definitions(-DCOMPILEDWITHC0X)
-   message(STATUS "Using flag -std=c++0x.")
+   message(STATUS "Using flag -std=c++17.")
 else()
-   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++17 support (required for std::optional in TagObservation).")
 endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
@@ -39,6 +38,18 @@ MESSAGE("OPENCV VERSION:")
 MESSAGE(${OpenCV_VERSION})
 
 find_package(Eigen3 3.1.0 REQUIRED)
+
+# Prefer a locally-built Pangolin with matching C++11 ABI.
+# /usr/local/lib/libpangolin.so may be an older ABI build (std::string without __cxx11),
+# which causes undefined references when linking examples against libORB_SLAM3.so.
+if(NOT Pangolin_DIR)
+    set(_PANGOLIN_CANDIDATE "${PROJECT_SOURCE_DIR}/../../Pangolin/build/src")
+    if(EXISTS "${_PANGOLIN_CANDIDATE}/PangolinConfig.cmake")
+        set(Pangolin_DIR "${_PANGOLIN_CANDIDATE}" CACHE PATH "Pangolin CMake config directory" FORCE)
+        message(STATUS "Using local Pangolin: ${Pangolin_DIR}")
+    endif()
+    unset(_PANGOLIN_CANDIDATE)
+endif()
 find_package(Pangolin REQUIRED)
 find_package(realsense2)
 
@@ -82,6 +93,14 @@ src/GeometricTools.cc
 src/TwoViewReconstruction.cc
 src/Config.cc
 src/Settings.cc
+src/ua_tag/TagFrameData.cc
+src/ua_tag/MapTagData.cc
+src/ua_tag/TagKeyFrameDataBase.cc
+src/ua_tag/TagMap.cc
+src/ua_tag/TagInitializer.cc
+src/ua_tag/TagTracker.cc
+src/ua_tag/TagOptimizer.cc
+src/ua_tag/TagMapExporter.cc
 include/System.h
 include/Tracking.h
 include/LocalMapping.h
@@ -111,7 +130,14 @@ include/GeometricTools.h
 include/TwoViewReconstruction.h
 include/SerializationUtils.h
 include/Config.h
-include/Settings.h)
+include/Settings.h
+include/ua_tag/TagObservation.h
+include/ua_tag/TagFrameData.h
+include/ua_tag/MapTagData.h
+include/ua_tag/TagKeyFrameDataBase.h
+include/ua_tag/TagMap.h
+include/ua_tag/TagOptimizer.h
+include/ua_tag/TagMapExporter.h)
 
 add_subdirectory(Thirdparty/g2o)
 
@@ -142,6 +168,13 @@ set(ORB_SLAM3_THIRDPARTY_LIBS
 if(ORB_SLAM3_WITH_APRILTAG)
     list(APPEND ORB_SLAM3_THIRDPARTY_LIBS apriltag)
     target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_APRILTAG)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/ua_tag/AprilTagDetector.cc
+        src/ua_tag/AprilTagVisualizer.cc
+        src/ua_tag/TagPoseLogger.cc
+        src/ua_tag/TagViewer.cc
+        include/ua_tag/TagViewer.h)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag)
 endif()
 if(ORB_SLAM3_WITH_GTSAM)
     list(APPEND ORB_SLAM3_THIRDPARTY_LIBS gtsam)
@@ -232,6 +265,10 @@ target_link_libraries(mono_kitti ${PROJECT_NAME})
 add_executable(mono_euroc
         Examples/Monocular/mono_euroc.cc)
 target_link_libraries(mono_euroc ${PROJECT_NAME})
+
+add_executable(mono_test_tag
+        Examples/TagFusion/mono_test_tag.cc)
+target_link_libraries(mono_test_tag ${PROJECT_NAME})
 
 add_executable(mono_tum_vi
         Examples/Monocular/mono_tum_vi.cc)

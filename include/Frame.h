@@ -39,6 +39,8 @@
 #include "Eigen/Core"
 #include "sophus/se3.hpp"
 
+#include "ua_tag/TagFrameData.h"
+
 namespace ORB_SLAM3
 {
 #define FRAME_GRID_ROWS 48
@@ -49,6 +51,11 @@ class KeyFrame;
 class ConstraintPoseImu;
 class GeometricCamera;
 class ORBextractor;
+
+namespace ua_tag
+{
+class AprilTagDetector;
+}  // namespace ua_tag
 
 class Frame
 {
@@ -65,13 +72,16 @@ public:
     Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
 
     // Constructor for Monocular cameras.
-    Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
+    Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), ua_tag::AprilTagDetector* pTagDetector = nullptr);
 
     // Destructor
     // ~Frame();
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1);
+
+    // Detect AprilTag corners and store into mTagFrameData (mono path).
+    void DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &im);
 
     // Compute Bag of Words representation.
     void ComputeBoW();
@@ -162,6 +172,18 @@ public:
         return mbHasVelocity;
     }
 
+    // Tag 追踪求解的相机位姿（与 ORB 的 mTcw 独立）
+    void SetTagPose(const Sophus::SE3<float> &Tcw);
+    void ClearTagPose();
+
+    inline Sophus::SE3<float> GetTagPose() const {
+        return mTcwTag;
+    }
+
+    inline bool HasTagPose() const {
+        return mbHasTagPose;
+    }
+
 
 
 private:
@@ -172,6 +194,10 @@ private:
     Eigen::Matrix<float,3,3> mRcw;
     Eigen::Matrix<float,3,1> mtcw;
     bool mbHasPose;
+
+    // Tag tracking pose (camera -> Tag-map world), separate from ORB mTcw
+    Sophus::SE3<float> mTcwTag;
+    bool mbHasTagPose;
 
     //Rcw_ not necessary as Sophus has a method for extracting the rotation matrix: Tcw_.rotationMatrix()
     //tcw_ not necessary as Sophus has a method for extracting the translation vector: Tcw_.translation()
@@ -297,6 +323,9 @@ public:
     string mNameFile;
 
     int mnDataset;
+
+    // AprilTag observations for this frame (corners only after DetectCorners; pose optional).
+    tag::TagFrameData mTagFrameData;
 
 #ifdef REGISTER_TIMES
     double mTimeORB_Ext;
