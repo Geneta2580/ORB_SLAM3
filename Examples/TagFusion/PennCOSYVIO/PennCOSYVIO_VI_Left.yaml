@@ -1,0 +1,73 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# PennCOSYVIO VI-Sensor Left camera (PinHole)
+# Intrinsics from official dataset page:
+#   K = [fx=445.80, fy=445.15, cx=371.50, cy=237.33]
+#   k1=-0.03671, k2=0.05260  (no tangential distortion)
+# Image size of extracted left_cam_frames: 752 x 480, ~20 FPS
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "PinHole"
+
+Camera1.fx: 445.80
+Camera1.fy: 445.15
+Camera1.cx: 371.50
+Camera1.cy: 237.33
+
+Camera1.k1: -0.03671
+Camera1.k2: 0.05260
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+Camera1.k3: 0.0
+
+Camera.width: 752
+Camera.height: 480
+
+# Camera frames per second (timestamps_cameras.txt uses 0.05 s step)
+# Must be integer (Settings::readParameter<int>)
+Camera.fps: 20
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0
+
+#--------------------------------------------------------------------------------------------
+# Tag Parameters  (backend: Thirdparty/apriltag ethz_apriltag2)
+#--------------------------------------------------------------------------------------------
+Tag.family: "tag36h11"
+Tag.hamming: 2
+Tag.black_border: 1
+# PennCOSYVIO tags are printed on letter-size paper; adjust if your measured black-square side differs
+Tag.size: 0.16
+Tag.clahe: 1
+Tag.clahe_clip_limit: 2.0
+Tag.clahe_tile_grid: 8
+Tag.verbose: 1
+Tag.export: 1
+Tag.export_dir: "tag_export_penncosyvio"
+Tag.viewer: 1

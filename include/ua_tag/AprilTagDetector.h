@@ -15,14 +15,16 @@ class Settings;
 namespace ua_tag
 {
 
-// 相机针孔模型（用于 PnP）；畸变可为空表示已校正/无畸变
+// 相机模型：角点去畸变 + IPPE PnP
+// 检测在原图上进行；corners_raw 为原图像素，corners_undistorted 为点去畸变结果
 struct CameraModel
 {
     double fx = 0.0;
     double fy = 0.0;
     double cx = 0.0;
     double cy = 0.0;
-    cv::Mat dist_coeffs;  // 空、4 或 5 维 (k1,k2,p1,p2[,k3])
+    cv::Mat dist_coeffs;  // PinHole: k1,k2,p1,p2[,k3]；Fisheye(KB8): k1..k4
+    bool is_fisheye = false;
 
     cv::Matx33d K() const
     {
@@ -46,13 +48,16 @@ struct PosePrediction
 
 struct AprilTagDetectorConfig
 {
+    // ethz_apriltag2 (Thirdparty/apriltag)
     std::string family = "tag36h11";
-    int hamming = 1;
-    double quad_decimate = 2.0;
-    double quad_sigma = 0.0;
-    int nthreads = 1;
-    bool refine_edges = true;
-    double tag_size = 0.16;  // Tag 边长（米），用于 IPPE_SQUARE
+    int hamming = 2;              // 接受的最大 ethz hammingDistance
+    int black_border = 1;         // ethz TagDetector blackBorder（标准 tag36h11=1）
+    double tag_size = 0.16;       // Tag 边长（米），用于 IPPE_SQUARE
+
+    // 原图送入 AprilTag 前的可选 CLAHE
+    bool clahe = false;
+    double clahe_clip_limit = 2.0;
+    int clahe_tile_grid = 8;
 
     // 从 ORB-SLAM3 settings yaml 读取 Tag.*（缺省保留默认值）
     static AprilTagDetectorConfig FromYaml(const std::string &settingsFile);
@@ -82,13 +87,21 @@ public:
     AprilTagDetector(const AprilTagDetector &) = delete;
     AprilTagDetector &operator=(const AprilTagDetector &) = delete;
 
-    // 仅角点检测：填充 tag_id / corners / hamming / decision_margin（不做 IPPE）
+    // 设置角点去畸变所用相机（含真实畸变；鱼眼设 is_fisheye=true）
+    void SetCameraModel(const CameraModel &camera);
+
+    // 在原图（可选 CLAHE）上检测；填充 corners_raw 与 corners_undistorted（不做 IPPE）
     bool DetectCorners(const cv::Mat &image, std::vector<tag::TagObservation> &observations);
+
+    // 上一帧实际送入检测器的图像（原图灰度 + 可选 CLAHE），供可视化
+    const cv::Mat &GetLastPreprocessedImage() const;
 
     // IPPE_SQUARE PnP；prediction 可选，为空则不做时序消歧
     bool EstimatePose(tag::TagObservation &observation,
                       const CameraModel &camera,
                       const PosePrediction *prediction = nullptr);
+
+    const AprilTagDetectorConfig &GetConfig() const;
 
 private:
     struct Impl;

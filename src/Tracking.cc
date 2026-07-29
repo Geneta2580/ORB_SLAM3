@@ -110,7 +110,29 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 #ifdef HAS_APRILTAG
     try
     {
+        // 从 yaml 初始化 AprilTagDetector（Tag.* 检测参数）。
+        // SetCameraModel 注入内参/畸变，供 DetectCorners 对角点去畸变（检测仍在原图上）。
         mpAprilTagDetector = new ua_tag::AprilTagDetector(strSettingPath);
+        if(mpAprilTagDetector && mpCamera && !mK.empty())
+        {
+            ua_tag::CameraModel cam_model;
+            cam_model.fx = static_cast<double>(mK.at<float>(0, 0));
+            cam_model.fy = static_cast<double>(mK.at<float>(1, 1));
+            cam_model.cx = static_cast<double>(mK.at<float>(0, 2));
+            cam_model.cy = static_cast<double>(mK.at<float>(1, 2));
+            if(mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
+            {
+                cam_model.is_fisheye = true;
+                cam_model.dist_coeffs = (cv::Mat_<double>(4, 1) <<
+                    mpCamera->getParameter(4), mpCamera->getParameter(5),
+                    mpCamera->getParameter(6), mpCamera->getParameter(7));
+            }
+            else if(!mDistCoef.empty())
+            {
+                mDistCoef.convertTo(cam_model.dist_coeffs, CV_64F);
+            }
+            mpAprilTagDetector->SetCameraModel(cam_model);
+        }
     }
     catch(const std::exception &e)
     {
@@ -1866,21 +1888,34 @@ void Tracking::EstimateAndVisualizeTagPoses()
     camera.fy = static_cast<double>(mK.at<float>(1, 1));
     camera.cx = static_cast<double>(mK.at<float>(0, 2));
     camera.cy = static_cast<double>(mK.at<float>(1, 2));
-    if(!mDistCoef.empty())
+    // 原图检测：传入真实畸变；鱼眼由 EstimatePose 内部用去畸变角点 + 零畸变做 IPPE
+    if(mpCamera && mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
+    {
+        camera.is_fisheye = true;
+        camera.dist_coeffs = (cv::Mat_<double>(4, 1) <<
+            mpCamera->getParameter(4), mpCamera->getParameter(5),
+            mpCamera->getParameter(6), mpCamera->getParameter(7));
+    }
+    else if(!mDistCoef.empty())
+    {
         mDistCoef.convertTo(camera.dist_coeffs, CV_64F);
+    }
 
     for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.left)
         mpAprilTagDetector->EstimatePose(obs, camera, nullptr);
     for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
         mpAprilTagDetector->EstimatePose(obs, camera, nullptr);
 
-    // 存储Tag检测可视化结果
+    // 可视化画在检测图上（原图域，与 corners_raw 一致）
+    const cv::Mat &tagVisImage = mCurrentFrame.mImTagDetect.empty()
+                                     ? mImGray
+                                     : mCurrentFrame.mImTagDetect;
     const std::string tagVisDir = "tag_vis";
     if(ua_tag::EnsureDir(tagVisDir))
     {
         char visName[64];
         std::snprintf(visName, sizeof(visName), "frame_%06lu.png", mCurrentFrame.mnId);
-        ua_tag::SaveTagsVis(mImGray, mCurrentFrame.mTagFrameData,
+        ua_tag::SaveTagsVis(tagVisImage, mCurrentFrame.mTagFrameData,
                             tagVisDir + "/" + visName);
     }
 #endif
@@ -1957,8 +1992,11 @@ void Tracking::TagTrack()
     // 每帧 Tag 流程结束后刷新独立 TagViewer（左检测图 / 右 Tag 地图）
     if(mpTagViewer)
     {
+        const cv::Mat &tagVisImage = mCurrentFrame.mImTagDetect.empty()
+                                         ? mImGray
+                                         : mCurrentFrame.mImTagDetect;
         mpTagViewer->Update(
-            mImGray, mCurrentFrame.mTagFrameData, mCurrentFrame.HasTagPose(),
+            tagVisImage, mCurrentFrame.mTagFrameData, mCurrentFrame.HasTagPose(),
             mCurrentFrame.HasTagPose() ? mCurrentFrame.GetTagPose() : Sophus::SE3f(),
             mCurrentFrame.mnId, mpTagMap, mTagState);
     }

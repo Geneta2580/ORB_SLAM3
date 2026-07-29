@@ -174,7 +174,9 @@ if(ORB_SLAM3_WITH_APRILTAG)
         src/ua_tag/TagPoseLogger.cc
         src/ua_tag/TagViewer.cc
         include/ua_tag/TagViewer.h)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/include
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/ethz_apriltag2/include)
 endif()
 if(ORB_SLAM3_WITH_GTSAM)
     list(APPEND ORB_SLAM3_THIRDPARTY_LIBS gtsam)
@@ -266,10 +268,33 @@ add_executable(mono_euroc
         Examples/Monocular/mono_euroc.cc)
 target_link_libraries(mono_euroc ${PROJECT_NAME})
 
+# TagFusion examples (per-dataset folders under Examples/TagFusion/)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/test)
 add_executable(mono_test_tag
-        Examples/TagFusion/mono_test_tag.cc)
+        Examples/TagFusion/test/mono_test_tag.cc)
 target_link_libraries(mono_test_tag ${PROJECT_NAME})
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/PennCOSYVIO)
+add_executable(mono_penncosyvio_tag
+        Examples/TagFusion/PennCOSYVIO/mono_penncosyvio_tag.cc)
+target_link_libraries(mono_penncosyvio_tag ${PROJECT_NAME})
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/XREAL_Glass)
+add_executable(mono_xreal_glass_tag
+        Examples/TagFusion/XREAL_Glass/mono_xreal_glass_tag.cc)
+target_link_libraries(mono_xreal_glass_tag ${PROJECT_NAME})
+
+# ethz_apriltag2 CLI for Python scripts (same backend as ua_tag::AprilTagDetector)
+if(ORB_SLAM3_WITH_APRILTAG)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/scripts)
+    add_executable(ethz_tag_detect scripts/ethz_tag_detect_cli.cc)
+    target_link_libraries(ethz_tag_detect apriltag ${OpenCV_LIBS})
+    target_include_directories(ethz_tag_detect PRIVATE
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/include
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/ethz_apriltag2/include)
+endif()
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
 add_executable(mono_tum_vi
         Examples/Monocular/mono_tum_vi.cc)
 target_link_libraries(mono_tum_vi ${PROJECT_NAME})

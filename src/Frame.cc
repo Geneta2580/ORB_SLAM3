@@ -30,6 +30,7 @@
 #include "ua_tag/AprilTagDetector.h"
 #endif
 
+#include <limits>
 #include <thread>
 #include <utility>
 #include <include/CameraModels/Pinhole.h>
@@ -76,7 +77,7 @@ Frame::Frame(const Frame &frame)
      mvRightToLeftMatch(frame.mvRightToLeftMatch), mvStereo3Dpoints(frame.mvStereo3Dpoints),
      mTlr(frame.mTlr), mRlr(frame.mRlr), mtlr(frame.mtlr), mTrl(frame.mTrl),
      mTcw(frame.mTcw), mbHasPose(false), mbHasTagPose(false), mbHasVelocity(false),
-     mTagFrameData(frame.mTagFrameData)
+     mTagFrameData(frame.mTagFrameData), mImTagDetect(frame.mImTagDetect)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
@@ -396,17 +397,22 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
 void Frame::DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &im)
 {
     mTagFrameData.Clear();
+    mImTagDetect.release();
 
 #ifdef HAS_APRILTAG
     if(!pTagDetector)
         return;
 
+    // 原图检测；DetectCorners 内可选 CLAHE，并写入 raw / undistorted 角点
     std::vector<tag::TagObservation> observations;
     if(pTagDetector->DetectCorners(im, observations))
     {
         for(size_t i = 0; i < observations.size(); ++i)
             mTagFrameData.Add(std::move(observations[i]));
     }
+
+    // 可视化与 corners_raw 同域（原图灰度 + 可选 CLAHE）
+    mImTagDetect = pTagDetector->GetLastPreprocessedImage().clone();
 #else
     (void)pTagDetector;
     (void)im;

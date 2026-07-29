@@ -5,25 +5,22 @@
 #include "Settings.h"
 #include "CameraModels/GeometricCamera.h"
 
+#include <apriltags/TagDetector.h>
+#include <apriltags/TagFamily.h>
+#include <apriltags/Tag16h5.h>
+#include <apriltags/Tag25h7.h>
+#include <apriltags/Tag25h9.h>
+#include <apriltags/Tag36h11.h>
+#include <apriltags/Tag36h9.h>
+
 #include <Eigen/Core>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-extern "C" {
-#include "apriltag.h"
-#include "tag16h5.h"
-#include "tag25h9.h"
-#include "tag36h11.h"
-#include "tagCircle21h7.h"
-#include "tagCircle49h12.h"
-#include "tagCustom48h12.h"
-#include "tagStandard41h12.h"
-#include "tagStandard52h13.h"
-}
-
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 
 namespace ORB_SLAM3
@@ -34,48 +31,19 @@ namespace ua_tag
 namespace
 {
 
-apriltag_family_t *CreateTagFamily(const std::string &family)
+const AprilTags::TagCodes *GetTagCodes(const std::string &family)
 {
     if(family == "tag36h11")
-        return tag36h11_create();
+        return &AprilTags::tagCodes36h11;
+    if(family == "tag36h9")
+        return &AprilTags::tagCodes36h9;
     if(family == "tag25h9")
-        return tag25h9_create();
+        return &AprilTags::tagCodes25h9;
+    if(family == "tag25h7")
+        return &AprilTags::tagCodes25h7;
     if(family == "tag16h5")
-        return tag16h5_create();
-    if(family == "tagCircle21h7")
-        return tagCircle21h7_create();
-    if(family == "tagCircle49h12")
-        return tagCircle49h12_create();
-    if(family == "tagStandard41h12")
-        return tagStandard41h12_create();
-    if(family == "tagStandard52h13")
-        return tagStandard52h13_create();
-    if(family == "tagCustom48h12")
-        return tagCustom48h12_create();
-    return NULL;
-}
-
-void DestroyTagFamily(apriltag_family_t *tf, const std::string &family)
-{
-    if(tf == NULL)
-        return;
-
-    if(family == "tag36h11")
-        tag36h11_destroy(tf);
-    else if(family == "tag25h9")
-        tag25h9_destroy(tf);
-    else if(family == "tag16h5")
-        tag16h5_destroy(tf);
-    else if(family == "tagCircle21h7")
-        tagCircle21h7_destroy(tf);
-    else if(family == "tagCircle49h12")
-        tagCircle49h12_destroy(tf);
-    else if(family == "tagStandard41h12")
-        tagStandard41h12_destroy(tf);
-    else if(family == "tagStandard52h13")
-        tagStandard52h13_destroy(tf);
-    else if(family == "tagCustom48h12")
-        tagCustom48h12_destroy(tf);
+        return &AprilTags::tagCodes16h5;
+    return nullptr;
 }
 
 // 将图像转换为灰度图像
@@ -110,24 +78,25 @@ Sophus::SE3f MakeTct(const cv::Matx33d &R, const cv::Vec3d &t)
                                             static_cast<float>(t[2])));
 }
 
-// 特征点去畸变
+bool HasSignificantDistortion(const cv::Mat &dist)
+{
+    if(dist.empty())
+        return false;
+    cv::Mat d64;
+    dist.convertTo(d64, CV_64F);
+    for(int i = 0; i < d64.rows * d64.cols; ++i)
+    {
+        if(std::abs(d64.at<double>(i)) > 1e-12)
+            return true;
+    }
+    return false;
+}
+
+// 角点去畸变：针孔用 cv::undistortPoints，鱼眼用 cv::fisheye::undistortPoints；新内参取原 K
 void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
                       std::array<cv::Point2f, 4> &out)
 {
-    bool has_distortion = false;
-    if(!camera.dist_coeffs.empty())
-    {
-        for(int i = 0; i < camera.dist_coeffs.total(); ++i)
-        {
-            if(std::abs(camera.dist_coeffs.at<double>(i)) > 1e-12)
-            {
-                has_distortion = true;
-                break;
-            }
-        }
-    }
-
-    if(!has_distortion)
+    if(!HasSignificantDistortion(camera.dist_coeffs))
     {
         out = src.corners_raw;
         return;
@@ -135,7 +104,26 @@ void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
 
     std::vector<cv::Point2f> pts(src.corners_raw.begin(), src.corners_raw.end());
     std::vector<cv::Point2f> undist;
-    cv::undistortPoints(pts, undist, cv::Mat(camera.K()), camera.dist_coeffs, cv::noArray(), cv::Mat(camera.K()));
+    const cv::Mat K = cv::Mat(camera.K());
+
+    if(camera.is_fisheye)
+    {
+        cv::Mat D;
+        camera.dist_coeffs.convertTo(D, CV_64F);
+        if(D.total() < 4)
+        {
+            out = src.corners_raw;
+            return;
+        }
+        if(D.rows != 4 || D.cols != 1)
+            D = D.reshape(1, 4);
+        cv::fisheye::undistortPoints(pts, undist, K, D, cv::noArray(), K);
+    }
+    else
+    {
+        cv::undistortPoints(pts, undist, K, camera.dist_coeffs, cv::noArray(), K);
+    }
+
     for(int k = 0; k < 4; ++k)
         out[k] = undist[k];
 }
@@ -144,13 +132,14 @@ double ComputeReprojectionError(const std::vector<cv::Point3f> &object_pts,
                                 const std::vector<cv::Point2f> &image_pts,
                                 const cv::Mat &rvec,
                                 const cv::Mat &tvec,
-                                const CameraModel &camera)
+                                const cv::Mat &K,
+                                const cv::Mat &dist_coeffs)
 {
     if(object_pts.empty() || object_pts.size() != image_pts.size())
         return std::numeric_limits<double>::infinity();
 
     std::vector<cv::Point2f> projected;
-    cv::projectPoints(object_pts, rvec, tvec, cv::Mat(camera.K()), camera.dist_coeffs, projected);
+    cv::projectPoints(object_pts, rvec, tvec, K, dist_coeffs, projected);
     if(projected.size() != image_pts.size())
         return std::numeric_limits<double>::infinity();
 
@@ -328,39 +317,49 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
 
 }  // namespace
 
+namespace {
+
+cv::Mat ApplyClahe(const cv::Mat &im, const AprilTagDetectorConfig &cfg)
+{
+    if(im.empty() || !cfg.clahe)
+        return im;
+
+    const int tile = std::max(1, cfg.clahe_tile_grid);
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(cfg.clahe_clip_limit, cv::Size(tile, tile));
+    cv::Mat out;
+    clahe->apply(im, out);
+    return out;
+}
+
+}  // namespace
+
 struct AprilTagDetector::Impl
 {
-    apriltag_detector_t *detector;
-    apriltag_family_t *family;
+    // ethz_apriltag2 (Thirdparty/apriltag)
+    std::unique_ptr<AprilTags::TagDetector> detector;
     std::string family_name;
     double tag_size;
+    AprilTagDetectorConfig config;
 
-    Impl(const AprilTagDetectorConfig &config)
-        : detector(NULL), family(NULL), family_name(config.family), tag_size(config.tag_size)
+    // 角点去畸变用相机（检测仍在原图上）
+    CameraModel camera_model;
+    bool has_camera_model = false;
+
+    // 最近一次送入检测器的图像（原图灰度 + 可选 CLAHE）
+    cv::Mat last_preprocessed;
+
+    Impl(const AprilTagDetectorConfig &cfg)
+        : family_name(cfg.family), tag_size(cfg.tag_size), config(cfg)
     {
-        family = CreateTagFamily(config.family);
-        if(family == NULL)
-            throw std::invalid_argument("AprilTagDetector: unsupported tag family: " + config.family);
+        const AprilTags::TagCodes *codes = GetTagCodes(cfg.family);
+        if(codes == nullptr)
+            throw std::invalid_argument("AprilTagDetector: unsupported tag family: " + cfg.family);
 
-        detector = apriltag_detector_create();
-        apriltag_detector_add_family_bits(detector, family, config.hamming);
-
-        detector->quad_decimate = config.quad_decimate;
-        detector->quad_sigma = config.quad_sigma;
-        detector->nthreads = config.nthreads;
-        detector->refine_edges = config.refine_edges;
+        const size_t black_border = static_cast<size_t>(std::max(1, cfg.black_border));
+        detector.reset(new AprilTags::TagDetector(*codes, black_border));
     }
 
-    ~Impl()
-    {
-        if(detector != NULL)
-        {
-            apriltag_detector_destroy(detector);
-            detector = NULL;
-        }
-        DestroyTagFamily(family, family_name);
-        family = NULL;
-    }
+    ~Impl() = default;
 };
 
 // 复用ORB-SLAM3的Settings，获取相机模型
@@ -368,9 +367,6 @@ CameraModel CameraModel::FromSettings(Settings *settings)
 {
     if(!settings)
         throw std::invalid_argument("CameraModel::FromSettings: settings is null");
-
-    if(settings->cameraType() == Settings::KannalaBrandt)
-        throw std::runtime_error("CameraModel::FromSettings: KannalaBrandt is not supported for AprilTag PnP");
 
     GeometricCamera *geom = settings->camera1();
     if(!geom)
@@ -381,6 +377,15 @@ CameraModel CameraModel::FromSettings(Settings *settings)
     cam.fy = static_cast<double>(geom->getParameter(1));
     cam.cx = static_cast<double>(geom->getParameter(2));
     cam.cy = static_cast<double>(geom->getParameter(3));
+
+    if(settings->cameraType() == Settings::KannalaBrandt)
+    {
+        cam.is_fisheye = true;
+        cam.dist_coeffs = (cv::Mat_<double>(4, 1) <<
+            geom->getParameter(4), geom->getParameter(5),
+            geom->getParameter(6), geom->getParameter(7));
+        return cam;
+    }
 
     cv::Mat dist = settings->camera1DistortionCoef();
     if(!dist.empty())
@@ -407,27 +412,44 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
     if(!node.empty())
         config.hamming = static_cast<int>(node);
 
-    node = fs["Tag.quad_decimate"];
+    node = fs["Tag.black_border"];
     if(!node.empty())
-        config.quad_decimate = static_cast<double>(node);
-
-    node = fs["Tag.quad_sigma"];
-    if(!node.empty())
-        config.quad_sigma = static_cast<double>(node);
-
-    node = fs["Tag.nthreads"];
-    if(!node.empty())
-        config.nthreads = static_cast<int>(node);
-
-    node = fs["Tag.refine_edges"];
-    if(!node.empty())
-        config.refine_edges = static_cast<int>(node) != 0;
+        config.black_border = static_cast<int>(node);
 
     node = fs["Tag.size"];
     if(!node.empty())
         config.tag_size = static_cast<double>(node);
 
+    node = fs["Tag.clahe"];
+    if(!node.empty())
+        config.clahe = static_cast<int>(node) != 0;
+
+    node = fs["Tag.clahe_clip_limit"];
+    if(!node.empty())
+        config.clahe_clip_limit = static_cast<double>(node);
+
+    node = fs["Tag.clahe_tile_grid"];
+    if(!node.empty())
+        config.clahe_tile_grid = static_cast<int>(node);
+
     return config;
+}
+
+const AprilTagDetectorConfig &AprilTagDetector::GetConfig() const
+{
+    return mpImpl->config;
+}
+
+void AprilTagDetector::SetCameraModel(const CameraModel &camera)
+{
+    mpImpl->camera_model = camera;
+    mpImpl->has_camera_model = (camera.fx > 0.0 && camera.fy > 0.0);
+}
+
+// 返回最近一次 DetectCorners 的预处理图（引用内部缓冲，下一帧会被覆盖）
+const cv::Mat &AprilTagDetector::GetLastPreprocessedImage() const
+{
+    return mpImpl->last_preprocessed;
 }
 
 // 默认初始化AprilTagDetector
@@ -448,51 +470,53 @@ AprilTagDetector::~AprilTagDetector()
     delete mpImpl;
 }
 
-// 检测AprilTags的角点
+// 检测 AprilTags 角点：原图（可选 CLAHE）上检测，再对角点做去畸变
+// 后端：Thirdparty/apriltag ethz_apriltag2 (AprilTags::TagDetector)
 bool AprilTagDetector::DetectCorners(const cv::Mat &image, std::vector<tag::TagObservation> &observations)
 {
     observations.clear();
+    mpImpl->last_preprocessed.release();
 
     cv::Mat gray = ToGray(image);
+    cv::Mat processed = ApplyClahe(gray, mpImpl->config);
+    if(!processed.isContinuous())
+        processed = processed.clone();
 
-    image_u8_t apriltag_image = {
-        gray.cols,
-        gray.rows,
-        gray.cols,
-        gray.data
-    };
+    mpImpl->last_preprocessed = processed;
 
-    zarray_t *raw = apriltag_detector_detect(mpImpl->detector, &apriltag_image);
-    if(raw == NULL)
+    if(!mpImpl->detector)
         return false;
 
-    const int n = zarray_size(raw);
-    observations.reserve(n);
+    std::vector<AprilTags::TagDetection> dets = mpImpl->detector->extractTags(processed);
+    observations.reserve(dets.size());
 
-    for(int i = 0; i < n; ++i)
+    for(const AprilTags::TagDetection &det : dets)
     {
-        apriltag_detection_t *det = NULL;
-        zarray_get(raw, i, &det);
-        if(det == NULL)
+        if(!det.good)
+            continue;
+        // Map yaml Tag.hamming to max accepted ethz hammingDistance
+        if(det.hammingDistance > mpImpl->config.hamming)
             continue;
 
         tag::TagObservation obs;
-        obs.tag_id = det->id;
+        obs.tag_id = det.id;
         obs.camera_id = tag::CameraId::LEFT_OR_MONO;
-        obs.hamming = det->hamming;
-        obs.decision_margin = det->decision_margin;
+        obs.hamming = det.hammingDistance;
+        // ethz has no decision_margin; use perimeter as a rough quality proxy
+        obs.decision_margin = static_cast<float>(det.observedPerimeter);
         for(int k = 0; k < 4; ++k)
-        {
-            obs.corners_raw[k] = cv::Point2f(static_cast<float>(det->p[k][0]),
-                                             static_cast<float>(det->p[k][1]));
-            // 去畸变前先拷贝；EstimatePose 时再写入真正的去畸变结果
-            obs.corners_undistorted[k] = obs.corners_raw[k];
-        }
-        // pose_estimate 保持 nullopt：DetectCorners 只负责原始角点
+            obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
+
+        // 同时写入去畸变角点（无相机模型或无畸变时等于 raw）
+        if(mpImpl->has_camera_model)
+            UndistortCorners(obs, mpImpl->camera_model, obs.corners_undistorted);
+        else
+            obs.corners_undistorted = obs.corners_raw;
+
+        // pose_estimate 保持 nullopt：DetectCorners 只负责角点
         observations.push_back(obs);
     }
 
-    apriltag_detections_destroy(raw);
     return true;
 }
 
@@ -506,20 +530,18 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
     if(mpImpl->tag_size <= 0.0 || camera.fx <= 0.0 || camera.fy <= 0.0)
         return false;
 
-    // 去畸变角点写入观测；PnP 仍用原始角点 + 畸变系数
-    UndistortCorners(observation, camera, observation.corners_undistorted);
-
     // 构建AprilTag的物体点，Tag自身坐标系下的4个角点3D坐标
     std::vector<cv::Point3f> object_pts;
     BuildSquareObjectPoints(mpImpl->tag_size, object_pts);
 
-    // PnP 使用原始角点 + 畸变系数（与 OpenCV 推荐一致）；无畸变时等价于理想针孔
-    std::vector<cv::Point2f> image_pts(observation.corners_raw.begin(),
-                                       observation.corners_raw.end());
+    // 统一用已去畸变角点 + 理想针孔；内参直接用 camera.K()，畸变置空
+    const cv::Mat K = cv::Mat(camera.K());
+    const cv::Mat dist_empty;
+    std::vector<cv::Point2f> image_pts(observation.corners_undistorted.begin(),
+                                       observation.corners_undistorted.end());
 
     std::vector<cv::Mat> rvecs, tvecs;
-    int nsol = cv::solvePnPGeneric(object_pts, image_pts,
-                                   cv::Mat(camera.K()), camera.dist_coeffs,
+    int nsol = cv::solvePnPGeneric(object_pts, image_pts, K, dist_empty,
                                    rvecs, tvecs,
                                    false, cv::SOLVEPNP_IPPE_SQUARE);
     if(nsol <= 0 || rvecs.empty() || tvecs.empty())
@@ -543,7 +565,7 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
         tag::TagPoseCandidate &cand = estimate.candidates[num_candidates++];
         cand.T_ct = MakeTct(R, t);
         cand.reprojection_error = static_cast<float>(ComputeReprojectionError(
-            object_pts, image_pts, rvecs[i], tvecs[i], camera));
+            object_pts, image_pts, rvecs[i], tvecs[i], K, dist_empty));
         cand.valid = true;
     }
 

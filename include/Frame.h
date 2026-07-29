@@ -327,6 +327,9 @@ public:
     // AprilTag observations for this frame (corners only after DetectCorners; pose optional).
     tag::TagFrameData mTagFrameData;
 
+    // Tag 检测用图副本（原图灰度 + 可选 CLAHE；与 corners_raw 同域；Detector 共享缓冲需 clone）。
+    cv::Mat mImTagDetect;
+
 #ifdef REGISTER_TIMES
     double mTimeORB_Ext;
     double mTimeStereoMatch;

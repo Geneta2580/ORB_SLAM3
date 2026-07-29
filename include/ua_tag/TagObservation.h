@@ -61,7 +61,7 @@ struct TagObservation
     // 原始检测角点（未去畸变，与输入图像像素一致）
     std::array<cv::Point2f, 4> corners_raw{};
 
-    // 去畸变后的角点（EstimatePose 时写入；无畸变时等于 corners_raw）
+    // 去畸变后的角点（DetectCorners 写入；无畸变时等于 corners_raw）
     std::array<cv::Point2f, 4> corners_undistorted{};
 
     // 解码质量：bit 强度相对判决阈值的平均裕度，越大越可靠
