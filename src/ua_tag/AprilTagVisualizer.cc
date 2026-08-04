@@ -3,6 +3,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -61,6 +62,31 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags)
     }
 }
 
+cv::Mat ToBgrClone(const cv::Mat &image)
+{
+    cv::Mat vis;
+    if(image.empty())
+        return vis;
+
+    if(image.channels() == 1)
+        cv::cvtColor(image, vis, cv::COLOR_GRAY2BGR);
+    else if(image.channels() == 4)
+        cv::cvtColor(image, vis, cv::COLOR_BGRA2BGR);
+    else
+        vis = image.clone();
+    return vis;
+}
+
+void PutPanelLabel(cv::Mat &vis, const char *label)
+{
+    if(vis.empty() || !label)
+        return;
+    cv::putText(vis, label, cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+    cv::putText(vis, label, cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                cv::Scalar(40, 40, 40), 1, cv::LINE_AA);
+}
+
 }  // namespace
 
 bool EnsureDir(const std::string &dirPath)
@@ -75,22 +101,50 @@ bool EnsureDir(const std::string &dirPath)
     return mkdir(dirPath.c_str(), 0755) == 0;
 }
 
-cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data)
+cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
+                 tag::CameraId camera_id)
 {
-    cv::Mat vis;
-    if(image.empty())
+    cv::Mat vis = ToBgrClone(image);
+    if(vis.empty())
         return vis;
 
-    if(image.channels() == 1)
-        cv::cvtColor(image, vis, cv::COLOR_GRAY2BGR);
-    else if(image.channels() == 4)
-        cv::cvtColor(image, vis, cv::COLOR_BGRA2BGR);
+    if(camera_id == tag::CameraId::RIGHT)
+        DrawObservations(vis, frame_data.right);
     else
-        vis = image.clone();
-
-    DrawObservations(vis, frame_data.left);
-    DrawObservations(vis, frame_data.right);
+        DrawObservations(vis, frame_data.left);
     return vis;
+}
+
+cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
+                       const tag::TagFrameData &frame_data)
+{
+    cv::Mat left = DrawTags(imLeft, frame_data, tag::CameraId::LEFT_OR_MONO);
+    cv::Mat right = DrawTags(imRight, frame_data, tag::CameraId::RIGHT);
+    if(left.empty() || right.empty())
+        return cv::Mat();
+
+    // 对齐高度后水平拼接
+    if(left.rows != right.rows)
+    {
+        const int h = std::max(left.rows, right.rows);
+        if(left.rows != h)
+        {
+            const int w = std::max(1, left.cols * h / left.rows);
+            cv::resize(left, left, cv::Size(w, h));
+        }
+        if(right.rows != h)
+        {
+            const int w = std::max(1, right.cols * h / right.rows);
+            cv::resize(right, right, cv::Size(w, h));
+        }
+    }
+
+    PutPanelLabel(left, "L");
+    PutPanelLabel(right, "R");
+
+    cv::Mat stereo;
+    cv::hconcat(left, right, stereo);
+    return stereo;
 }
 
 bool SaveTagsVis(const cv::Mat &image,
@@ -100,7 +154,23 @@ bool SaveTagsVis(const cv::Mat &image,
     if(savePath.empty() || frame_data.Empty())
         return false;
 
-    cv::Mat vis = DrawTags(image, frame_data);
+    cv::Mat vis = DrawTags(image, frame_data, tag::CameraId::LEFT_OR_MONO);
+    if(vis.empty())
+        return false;
+
+    return cv::imwrite(savePath, vis);
+}
+
+bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
+                 const tag::TagFrameData &frame_data,
+                 const std::string &savePath)
+{
+    if(savePath.empty() || frame_data.Empty())
+        return false;
+    if(imLeft.empty() || imRight.empty())
+        return false;
+
+    cv::Mat vis = DrawTagsStereo(imLeft, imRight, frame_data);
     if(vis.empty())
         return false;
 

@@ -23,9 +23,15 @@
 #include "MapPoint.h"
 #include "KeyFrame.h"
 
-#include <set>
-#include <pangolin/pangolin.h>
+#include <cstddef>
+#include <memory>
 #include <mutex>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <pangolin/pangolin.h>
 
 #include <boost/serialization/base_object.hpp>
 
@@ -37,6 +43,10 @@ class MapPoint;
 class KeyFrame;
 class Atlas;
 class KeyFrameDatabase;
+
+namespace tag {
+class MapTagData;
+}
 
 class Map
 {
@@ -80,6 +90,25 @@ public:
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
     void InformNewBigChange();
     int GetLastBigChangeIdx();
+
+    // MapTag 容器：Map 为 shared_ptr 唯一持久化所有者（KF 仅持裸指针）
+    using MapTagPtr = std::shared_ptr<tag::MapTagData>;
+    using MapTagContainer = std::unordered_map<int, MapTagPtr>;
+
+    bool AddMapTag(const MapTagPtr &pTag);
+    bool EraseMapTag(int tagId);
+    void ClearMapTags();
+    MapTagPtr GetMapTag(int tagId) const;
+    std::vector<MapTagPtr> GetAllMapTags() const;
+    bool HasMapTag(int tagId) const;
+    std::size_t MapTagsInMap() const;
+
+    // Tag 米制初始化是否已成功提交（不等同于 MapTagsInMap()>0）
+    bool IsTagInitialized() const;
+    void SetTagInitialized(bool initialized);
+
+    // KeyFrame ↔ MapTag 双向关联一致性检查（仅用公开接口）
+    bool CheckMapTagAssociations(std::string *error = nullptr) const;
 
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<MapPoint*> GetAllMapPoints();
@@ -162,6 +191,9 @@ protected:
     std::set<MapPoint*> mspMapPoints;
     std::set<KeyFrame*> mspKeyFrames;
 
+    MapTagContainer mMapTags;
+    bool mbTagInitialized = false;
+
     // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
     std::vector<MapPoint*> mvpBackupMapPoints;
     std::vector<KeyFrame*> mvpBackupKeyFrames;
@@ -198,8 +230,8 @@ protected:
     bool mbIMU_BA1;
     bool mbIMU_BA2;
 
-    // Mutex
-    std::mutex mMutexMap;
+    // Mutex（const 查询接口也需加锁）
+    mutable std::mutex mMutexMap;
 
 };
 

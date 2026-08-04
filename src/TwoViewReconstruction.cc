@@ -128,6 +128,25 @@ namespace ORB_SLAM3
         }
     }
 
+    int TwoViewReconstruction::TriangulateWithPose(const std::vector<cv::KeyPoint>& vKeys1, const std::vector<cv::KeyPoint>& vKeys2,
+                                                   const std::vector<int> &vMatches12, const Sophus::SE3f &T21,
+                                                   std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated)
+    {
+        std::vector<Match> vMatches;
+        vMatches.reserve(vMatches12.size());
+        for(size_t i = 0, iend = vMatches12.size(); i < iend; i++)
+        {
+            if(vMatches12[i] >= 0)
+                vMatches.emplace_back(i, vMatches12[i]);
+        }
+
+        std::vector<bool> vbInliers(vMatches.size(), true);
+        float parallax = 0.f;
+        return CheckRT(T21.rotationMatrix(), T21.translation(),
+                       vKeys1, vKeys2, vMatches, vbInliers, mK,
+                       vP3D, 4.0f * mSigma2, vbTriangulated, parallax);
+    }
+
     void TwoViewReconstruction::FindHomography(vector<bool> &vbMatchesInliers, float &score, Eigen::Matrix3f &H21)
     {
         // Number of putative matches

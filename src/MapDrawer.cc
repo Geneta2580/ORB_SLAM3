@@ -19,6 +19,7 @@
 #include "MapDrawer.h"
 #include "MapPoint.h"
 #include "KeyFrame.h"
+#include "ua_tag/MapTagData.h"
 #include <pangolin/pangolin.h>
 #include <mutex>
 
@@ -391,6 +392,160 @@ void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const b
 
                 glPopMatrix();
             }
+        }
+    }
+}
+
+void MapDrawer::DrawTagMap(const bool bDrawTags, const bool bDrawTagKFs)
+{
+    if(!mpAtlas)
+        return;
+
+    Map *pMap = mpAtlas->GetCurrentMap();
+    if(!pMap || !pMap->IsTagInitialized())
+        return;
+
+    if(bDrawTags)
+    {
+        // 边颜色与 TagViewer / AprilTagVisualizer 一致：绿 / 黄 / 橙 / 蓝
+        const float edge_rgb[4][3] = {
+            {0.0f, 1.0f, 0.0f},
+            {1.0f, 1.0f, 0.0f},
+            {1.0f, 0.5f, 0.0f},
+            {0.0f, 0.4f, 1.0f},
+        };
+
+        const auto tags = pMap->GetAllMapTags();
+        for(const auto &map_tag : tags)
+        {
+            if(!map_tag)
+                continue;
+
+            if(map_tag->HasWorldCorners())
+            {
+                const auto corners = map_tag->GetWorldCorners();
+                glLineWidth(map_tag->IsFixed() ? 3.0f : 1.5f);
+                glBegin(GL_LINES);
+                for(int k = 0; k < 4; ++k)
+                {
+                    const Eigen::Vector3f &p0 = corners[k];
+                    const Eigen::Vector3f &p1 = corners[(k + 1) % 4];
+                    glColor3f(edge_rgb[k][0], edge_rgb[k][1], edge_rgb[k][2]);
+                    glVertex3f(p0.x(), p0.y(), p0.z());
+                    glVertex3f(p1.x(), p1.y(), p1.z());
+                }
+                glEnd();
+
+                if(map_tag->IsFixed())
+                    glColor4f(0.15f, 0.85f, 0.25f, 0.25f);
+                else
+                    glColor4f(0.95f, 0.55f, 0.10f, 0.20f);
+
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glBegin(GL_QUADS);
+                for(int k = 0; k < 4; ++k)
+                {
+                    const Eigen::Vector3f &p = corners[k];
+                    glVertex3f(p.x(), p.y(), p.z());
+                }
+                glEnd();
+            }
+
+            if(map_tag->HasPose())
+            {
+                const Eigen::Matrix4f T_wt = map_tag->GetPose().matrix();
+                const float axis_len = mCameraSize * 0.6f;
+                glPushMatrix();
+                glMultMatrixf(T_wt.data());
+                glLineWidth(2.0f);
+                glBegin(GL_LINES);
+                glColor3f(1.0f, 0.2f, 0.2f);
+                glVertex3f(0, 0, 0);
+                glVertex3f(axis_len, 0, 0);
+                glColor3f(0.2f, 1.0f, 0.2f);
+                glVertex3f(0, 0, 0);
+                glVertex3f(0, axis_len, 0);
+                glColor3f(0.2f, 0.4f, 1.0f);
+                glVertex3f(0, 0, 0);
+                glVertex3f(0, 0, axis_len);
+                glEnd();
+                glPopMatrix();
+            }
+
+            // Tag ID 文字
+            Eigen::Vector3f center = Eigen::Vector3f::Zero();
+            bool has_center = false;
+            if(map_tag->HasWorldCorners())
+            {
+                const auto corners = map_tag->GetWorldCorners();
+                for(int k = 0; k < 4; ++k)
+                    center += corners[k];
+                center *= 0.25f;
+                const Eigen::Vector3f e0 = corners[1] - corners[0];
+                const Eigen::Vector3f e1 = corners[3] - corners[0];
+                Eigen::Vector3f n = e0.cross(e1);
+                if(n.squaredNorm() > 1e-12f)
+                    center += n.normalized() * (mCameraSize * 0.35f);
+                has_center = true;
+            }
+            else if(map_tag->HasPose())
+            {
+                center = map_tag->GetPose().translation();
+                has_center = true;
+            }
+
+            if(has_center)
+            {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_DEPTH_TEST);
+                glDisable(GL_TEXTURE_2D);
+                glColor4f(0.1f, 0.1f, 0.1f, 1.0f);
+                pangolin::GlFont::I().Text("id:%d", map_tag->Id()).Draw(
+                    center.x(), center.y(), center.z());
+                glEnable(GL_DEPTH_TEST);
+            }
+        }
+    }
+
+    if(bDrawTagKFs)
+    {
+        const float w = mCameraSize * 0.7f;
+        const float h = w * 0.75f;
+        const float z = w * 0.6f;
+
+        for(KeyFrame *pKF : pMap->GetAllKeyFrames())
+        {
+            if(!pKF || pKF->isBad())
+                continue;
+            if(pKF->GetMapTagMatches().empty())
+                continue;
+
+            Eigen::Matrix4f Twc = pKF->GetPoseInverse().matrix();
+            glPushMatrix();
+            glMultMatrixf(Twc.data());
+            glLineWidth(mCameraLineWidth);
+            glColor3f(0.55f, 0.55f, 0.55f);
+            glBegin(GL_LINES);
+            glVertex3f(0, 0, 0);
+            glVertex3f(w, h, z);
+            glVertex3f(0, 0, 0);
+            glVertex3f(w, -h, z);
+            glVertex3f(0, 0, 0);
+            glVertex3f(-w, -h, z);
+            glVertex3f(0, 0, 0);
+            glVertex3f(-w, h, z);
+            glVertex3f(w, h, z);
+            glVertex3f(w, -h, z);
+            glVertex3f(-w, h, z);
+            glVertex3f(-w, -h, z);
+            glVertex3f(-w, h, z);
+            glVertex3f(w, h, z);
+            glVertex3f(-w, -h, z);
+            glVertex3f(w, -h, z);
+            glEnd();
+            glPopMatrix();
         }
     }
 }

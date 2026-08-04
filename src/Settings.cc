@@ -125,6 +125,8 @@ namespace ORB_SLAM3 {
     }
 
     Settings::Settings(const std::string &configFile, const int& sensor) :
+    calibration1_(nullptr), calibration2_(nullptr),
+    originalCalib1_(nullptr), originalCalib2_(nullptr),
     bNeedToUndistort_(false), bNeedToRectify_(false), bNeedToResize1_(false), bNeedToResize2_(false) {
         sensor_ = sensor;
 
@@ -144,9 +146,14 @@ namespace ORB_SLAM3 {
         readCamera1(fSettings);
         cout << "\t-Loaded camera 1" << endl;
 
-        //Read second camera if stereo (not rectified)
+        // 双目必须显式提供左右目参数（Camera1 + Camera2），禁止回退左目
         if(sensor_ == System::STEREO || sensor_ == System::IMU_STEREO){
             readCamera2(fSettings);
+            if(!calibration2_){
+                cerr << "[ERROR]: Stereo/IMU_STEREO requires Camera2.* in settings file, aborting..."
+                     << endl;
+                exit(-1);
+            }
             cout << "\t-Loaded camera 2" << endl;
         }
 
@@ -276,10 +283,13 @@ namespace ORB_SLAM3 {
     void Settings::readCamera2(cv::FileStorage &fSettings) {
         bool found;
         vector<float> vCalibration;
+        calibration2_ = nullptr;
+        originalCalib2_ = nullptr;
+
         if (cameraType_ == PinHole) {
             bNeedToRectify_ = true;
 
-            //Read intrinsic parameters
+            //Read intrinsic parameters（双目必须显式给出 Camera2）
             float fx = readParameter<float>(fSettings,"Camera2.fx",found);
             float fy = readParameter<float>(fSettings,"Camera2.fy",found);
             float cx = readParameter<float>(fSettings,"Camera2.cx",found);
@@ -308,6 +318,17 @@ namespace ORB_SLAM3 {
                 vPinHoleDistorsion2_[3] = readParameter<float>(fSettings,"Camera2.p2",found);
             }
         }
+        else if(cameraType_ == Rectified){
+            // Rectified 双目同样强制要求 Camera2 内参，禁止默认/回退左目
+            float fx = readParameter<float>(fSettings,"Camera2.fx",found);
+            float fy = readParameter<float>(fSettings,"Camera2.fy",found);
+            float cx = readParameter<float>(fSettings,"Camera2.cx",found);
+            float cy = readParameter<float>(fSettings,"Camera2.cy",found);
+
+            vCalibration = {fx, fy, cx, cy};
+            calibration2_ = new Pinhole(vCalibration);
+            originalCalib2_ = new Pinhole(vCalibration);
+        }
         else if(cameraType_ == KannalaBrandt){
             //Read intrinsic parameters
             float fx = readParameter<float>(fSettings,"Camera2.fx",found);
@@ -315,10 +336,10 @@ namespace ORB_SLAM3 {
             float cx = readParameter<float>(fSettings,"Camera2.cx",found);
             float cy = readParameter<float>(fSettings,"Camera2.cy",found);
 
-            float k0 = readParameter<float>(fSettings,"Camera1.k1",found);
-            float k1 = readParameter<float>(fSettings,"Camera1.k2",found);
-            float k2 = readParameter<float>(fSettings,"Camera1.k3",found);
-            float k3 = readParameter<float>(fSettings,"Camera1.k4",found);
+            float k0 = readParameter<float>(fSettings,"Camera2.k1",found);
+            float k1 = readParameter<float>(fSettings,"Camera2.k2",found);
+            float k2 = readParameter<float>(fSettings,"Camera2.k3",found);
+            float k3 = readParameter<float>(fSettings,"Camera2.k4",found);
 
 
             vCalibration = {fx,fy,cx,cy,k0,k1,k2,k3};
@@ -331,6 +352,10 @@ namespace ORB_SLAM3 {
             vector<int> vOverlapping = {colBegin, colEnd};
 
             static_cast<KannalaBrandt8*>(calibration2_)->mvLappingArea = vOverlapping;
+        }
+        else{
+            cerr << "[ERROR]: Stereo Camera2 unsupported for Camera.type, aborting..." << endl;
+            exit(-1);
         }
 
         //Load stereo extrinsic calibration
@@ -452,6 +477,15 @@ namespace ORB_SLAM3 {
 
     void Settings::readViewer(cv::FileStorage &fSettings) {
         bool found;
+
+        // Viewer.enable 可选；缺省开启（与原先 System 构造参数默认行为一致）
+        {
+            cv::FileNode nodeEnable = fSettings["Viewer.enable"];
+            if(!nodeEnable.empty())
+                viewerEnable_ = static_cast<int>(nodeEnable) != 0;
+            else
+                viewerEnable_ = true;
+        }
 
         keyFrameSize_ = readParameter<float>(fSettings,"Viewer.KeyFrameSize",found);
         keyFrameLineWidth_ = readParameter<float>(fSettings,"Viewer.KeyFrameLineWidth",found);

@@ -11,11 +11,21 @@ namespace ORB_SLAM3
 namespace ua_tag
 {
 
-// 在图像上绘制 Tag：id / 位姿有效性(v) / 歧义是否解决(a)
-cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data);
+// 在单张图上绘制指定相机观测（默认左目/单目）
+cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
+                 tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO);
 
-// 绘制并保存到本地；成功返回 true
+// 左右目分别绘制后水平拼接（同步并列可视化）
+cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
+                       const tag::TagFrameData &frame_data);
+
+// 单目/仅左目：绘制并保存
 bool SaveTagsVis(const cv::Mat &image,
+                 const tag::TagFrameData &frame_data,
+                 const std::string &savePath);
+
+// 双目：左右检测帧并排保存
+bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
                  const tag::TagFrameData &frame_data,
                  const std::string &savePath);
 

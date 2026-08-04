@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -92,11 +93,41 @@ bool HasSignificantDistortion(const cv::Mat &dist)
     return false;
 }
 
-// 角点去畸变：针孔用 cv::undistortPoints，鱼眼用 cv::fisheye::undistortPoints；新内参取原 K
-void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
-                      std::array<cv::Point2f, 4> &out)
+// 用 GeometricCamera::unproject 把原图角点收到与 ORB 一致的理想针孔像素（K 同相机）
+void UndistortCornersWithGeometricCamera(const tag::TagObservation &src,
+                                         GeometricCamera *geom,
+                                         std::array<cv::Point2f, 4> &out)
 {
+    const float fx = geom->getParameter(0);
+    const float fy = geom->getParameter(1);
+    const float cx = geom->getParameter(2);
+    const float cy = geom->getParameter(3);
+    for(int k = 0; k < 4; ++k)
+    {
+        const cv::Point3f ray = geom->unproject(src.corners_raw[k]);
+        const float invz = (std::abs(ray.z) > 1e-12f) ? (1.f / ray.z) : 1.f;
+        out[k] = cv::Point2f(fx * ray.x * invz + cx, fy * ray.y * invz + cy);
+    }
+}
+
+// 角点去畸变：优先 GeometricCamera（与 ORB BA 同源）；否则针孔用 cv::undistortPoints
+void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
+                      GeometricCamera *geom, std::array<cv::Point2f, 4> &out)
+{
+    if(geom)
+    {
+        UndistortCornersWithGeometricCamera(src, geom, out);
+        return;
+    }
+
     if(!HasSignificantDistortion(camera.dist_coeffs))
+    {
+        out = src.corners_raw;
+        return;
+    }
+
+    // 无 GeometricCamera 时：针孔走 OpenCV；鱼眼不再用 cv::fisheye（与 KB 不一致）
+    if(camera.is_fisheye)
     {
         out = src.corners_raw;
         return;
@@ -105,41 +136,23 @@ void UndistortCorners(const tag::TagObservation &src, const CameraModel &camera,
     std::vector<cv::Point2f> pts(src.corners_raw.begin(), src.corners_raw.end());
     std::vector<cv::Point2f> undist;
     const cv::Mat K = cv::Mat(camera.K());
-
-    if(camera.is_fisheye)
-    {
-        cv::Mat D;
-        camera.dist_coeffs.convertTo(D, CV_64F);
-        if(D.total() < 4)
-        {
-            out = src.corners_raw;
-            return;
-        }
-        if(D.rows != 4 || D.cols != 1)
-            D = D.reshape(1, 4);
-        cv::fisheye::undistortPoints(pts, undist, K, D, cv::noArray(), K);
-    }
-    else
-    {
-        cv::undistortPoints(pts, undist, K, camera.dist_coeffs, cv::noArray(), K);
-    }
-
+    cv::undistortPoints(pts, undist, K, camera.dist_coeffs, cv::noArray(), K);
     for(int k = 0; k < 4; ++k)
         out[k] = undist[k];
 }
 
-double ComputeReprojectionError(const std::vector<cv::Point3f> &object_pts,
-                                const std::vector<cv::Point2f> &image_pts,
-                                const cv::Mat &rvec,
-                                const cv::Mat &tvec,
-                                const cv::Mat &K,
-                                const cv::Mat &dist_coeffs)
+// 针孔零畸变重投影（仅作无 GeometricCamera 时的回退）
+double ComputeReprojectionErrorPinhole(const std::vector<cv::Point3f> &object_pts,
+                                       const std::vector<cv::Point2f> &image_pts,
+                                       const cv::Mat &rvec,
+                                       const cv::Mat &tvec,
+                                       const cv::Mat &K)
 {
     if(object_pts.empty() || object_pts.size() != image_pts.size())
         return std::numeric_limits<double>::infinity();
 
     std::vector<cv::Point2f> projected;
-    cv::projectPoints(object_pts, rvec, tvec, K, dist_coeffs, projected);
+    cv::projectPoints(object_pts, rvec, tvec, K, cv::Mat(), projected);
     if(projected.size() != image_pts.size())
         return std::numeric_limits<double>::infinity();
 
@@ -151,6 +164,31 @@ double ComputeReprojectionError(const std::vector<cv::Point3f> &object_pts,
         sum_sq += dx * dx + dy * dy;
     }
     return std::sqrt(sum_sq / static_cast<double>(image_pts.size()));
+}
+
+// 与 ORB BA 一致：GeometricCamera::project 到原图像素，对比 corners_raw
+double ComputeReprojectionErrorGeometric(const std::vector<cv::Point3f> &object_pts,
+                                         const std::array<cv::Point2f, 4> &corners_raw,
+                                         const Sophus::SE3f &T_ct,
+                                         GeometricCamera *geom)
+{
+    if(!geom || object_pts.size() != 4)
+        return std::numeric_limits<double>::infinity();
+
+    double sum_sq = 0.0;
+    for(int i = 0; i < 4; ++i)
+    {
+        const Eigen::Vector3f P_t(object_pts[i].x, object_pts[i].y, object_pts[i].z);
+        const Eigen::Vector3f P_c = T_ct * P_t;
+        if(P_c.z() <= 0.0f)
+            return std::numeric_limits<double>::infinity();
+
+        const cv::Point2f uv = geom->project(cv::Point3f(P_c.x(), P_c.y(), P_c.z()));
+        const double dx = static_cast<double>(uv.x - corners_raw[i].x);
+        const double dy = static_cast<double>(uv.y - corners_raw[i].y);
+        sum_sq += dx * dx + dy * dy;
+    }
+    return std::sqrt(sum_sq / 4.0);
 }
 
 // 相对预测的旋转角偏差（弧度）：R_err = R_pred^T * R_cand
@@ -344,6 +382,8 @@ struct AprilTagDetector::Impl
     // 角点去畸变用相机（检测仍在原图上）
     CameraModel camera_model;
     bool has_camera_model = false;
+    // 与 ORB Tracking/BA 共用；鱼眼路径优先用其 project/unproject
+    GeometricCamera *geometric_camera = nullptr;
 
     // 最近一次送入检测器的图像（原图灰度 + 可选 CLAHE）
     cv::Mat last_preprocessed;
@@ -446,6 +486,11 @@ void AprilTagDetector::SetCameraModel(const CameraModel &camera)
     mpImpl->has_camera_model = (camera.fx > 0.0 && camera.fy > 0.0);
 }
 
+void AprilTagDetector::SetGeometricCamera(GeometricCamera *camera)
+{
+    mpImpl->geometric_camera = camera;
+}
+
 // 返回最近一次 DetectCorners 的预处理图（引用内部缓冲，下一帧会被覆盖）
 const cv::Mat &AprilTagDetector::GetLastPreprocessedImage() const
 {
@@ -472,7 +517,10 @@ AprilTagDetector::~AprilTagDetector()
 
 // 检测 AprilTags 角点：原图（可选 CLAHE）上检测，再对角点做去畸变
 // 后端：Thirdparty/apriltag ethz_apriltag2 (AprilTags::TagDetector)
-bool AprilTagDetector::DetectCorners(const cv::Mat &image, std::vector<tag::TagObservation> &observations)
+bool AprilTagDetector::DetectCorners(const cv::Mat &image,
+                                     std::vector<tag::TagObservation> &observations,
+                                     tag::CameraId camera_id,
+                                     GeometricCamera *geometric_camera)
 {
     observations.clear();
     mpImpl->last_preprocessed.release();
@@ -487,6 +535,20 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image, std::vector<tag::TagO
     if(!mpImpl->detector)
         return false;
 
+    // 右目必须显式传入相机模型，禁止回退默认/左目
+    GeometricCamera *geom = geometric_camera;
+    if(!geom)
+    {
+        if(camera_id == tag::CameraId::RIGHT)
+        {
+            std::cerr << "ERROR: DetectCorners(RIGHT) requires GeometricCamera "
+                         "(no left/default fallback)"
+                      << std::endl;
+            return false;
+        }
+        geom = mpImpl->geometric_camera;
+    }
+
     std::vector<AprilTags::TagDetection> dets = mpImpl->detector->extractTags(processed);
     observations.reserve(dets.size());
 
@@ -500,16 +562,16 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image, std::vector<tag::TagO
 
         tag::TagObservation obs;
         obs.tag_id = det.id;
-        obs.camera_id = tag::CameraId::LEFT_OR_MONO;
+        obs.camera_id = camera_id;
         obs.hamming = det.hammingDistance;
         // ethz has no decision_margin; use perimeter as a rough quality proxy
         obs.decision_margin = static_cast<float>(det.observedPerimeter);
         for(int k = 0; k < 4; ++k)
             obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
 
-        // 同时写入去畸变角点（无相机模型或无畸变时等于 raw）
-        if(mpImpl->has_camera_model)
-            UndistortCorners(obs, mpImpl->camera_model, obs.corners_undistorted);
+        // 写入与 GeometricCamera 一致的理想针孔角点（供 IPPE）；无模型时等于 raw
+        if(mpImpl->has_camera_model || geom)
+            UndistortCorners(obs, mpImpl->camera_model, geom, obs.corners_undistorted);
         else
             obs.corners_undistorted = obs.corners_raw;
 
@@ -534,7 +596,8 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
     std::vector<cv::Point3f> object_pts;
     BuildSquareObjectPoints(mpImpl->tag_size, object_pts);
 
-    // 统一用已去畸变角点 + 理想针孔；内参直接用 camera.K()，畸变置空
+    // IPPE 初值：GeometricCamera 一致的针孔像素 + 零畸变 K
+    // 候选误差：优先用 GeometricCamera::project vs corners_raw（与 ORB BA 同域）
     const cv::Mat K = cv::Mat(camera.K());
     const cv::Mat dist_empty;
     std::vector<cv::Point2f> image_pts(observation.corners_undistorted.begin(),
@@ -547,6 +610,7 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
     if(nsol <= 0 || rvecs.empty() || tvecs.empty())
         return false;
 
+    GeometricCamera *geom = mpImpl->geometric_camera;
     tag::TagPoseEstimate estimate;
 
     // 仅正深度解进入候选（只保留有效 IPPE 解）
@@ -564,9 +628,17 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
 
         tag::TagPoseCandidate &cand = estimate.candidates[num_candidates++];
         cand.T_ct = MakeTct(R, t);
-        cand.reprojection_error = static_cast<float>(ComputeReprojectionError(
-            object_pts, image_pts, rvecs[i], tvecs[i], K, dist_empty));
-        cand.valid = true;
+        if(geom)
+        {
+            cand.reprojection_error = static_cast<float>(ComputeReprojectionErrorGeometric(
+                object_pts, observation.corners_raw, cand.T_ct, geom));
+        }
+        else
+        {
+            cand.reprojection_error = static_cast<float>(ComputeReprojectionErrorPinhole(
+                object_pts, image_pts, rvecs[i], tvecs[i], K));
+        }
+        cand.valid = std::isfinite(cand.reprojection_error);
     }
 
     if(num_candidates <= 0)

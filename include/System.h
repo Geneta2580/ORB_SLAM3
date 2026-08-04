@@ -43,11 +43,6 @@
 namespace ORB_SLAM3
 {
 
-namespace tag
-{
-class TagMap;
-}  // namespace tag
-
 class Verbose
 {
 public:
@@ -218,9 +213,6 @@ private:
     // Map structure that stores the pointers to all KeyFrames and MapPoints.
     //Map* mpMap;
     Atlas* mpAtlas;
-
-    // Tag 地图（System 启动时创建；内容初始化由 Tag 跟踪流程完成）
-    tag::TagMap* mpTagMap;
 
     // Tracker. It receives a frame and computes the associated camera pose.
     // It also decides when to insert a new keyframe, create some new MapPoints and

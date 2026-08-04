@@ -39,10 +39,11 @@
 
 #include "GeometricCamera.h"
 
-#include "ua_tag/TagTracking.h"
 #include "ua_tag/TagInitializer.h"
 
+#include <fstream>
 #include <mutex>
+#include <string>
 #include <unordered_set>
 
 namespace ORB_SLAM3
@@ -64,7 +65,6 @@ class AprilTagDetector;
 namespace tag
 {
 class TagTracker;
-class TagMap;
 class TagViewer;
 }  // namespace tag
 
@@ -75,7 +75,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Atlas* pAtlas,
              KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings,
-             tag::TagMap* pTagMap = nullptr, const string &_nameSeq=std::string());
+             const string &_nameSeq=std::string());
 
     ~Tracking();
 
@@ -122,7 +122,7 @@ public:
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder="");
     void SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, Map* pMap);
 
-    // 导出 TagMap 四角点与相机 TagPose 轨迹（Shutdown 前调用）
+    // 导出 MapTag 四角点与相机 Pose 轨迹（Shutdown 前调用）
     void SaveTagExports();
 
     float GetImageScale();
@@ -149,9 +149,6 @@ public:
 
     eTrackingState mState;
     eTrackingState mLastProcessedState;
-
-    // Tag 跟踪状态（独立于 ORB mState）
-    tag::TagTrackingState mTagState;
 
     // Input sensor
     int mSensor;
@@ -228,6 +225,7 @@ protected:
     void StereoInitialization();
 
     // Map initialization for monocular
+    // 暂不接入 Tag 米制初始化；Tag 初始化仅在双目路径启用
     void MonocularInitialization();
     //void CreateNewMapPoints();
     void CreateInitialMapMonocular();
@@ -291,10 +289,9 @@ protected:
     // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
     ua_tag::AprilTagDetector* mpAprilTagDetector;
 
-    // Tag 独立跟踪模块（与 ORB Tracking 状态机分离）
+    // Tag 模块（初始化挂在 MonocularInitialization；跟踪使用 eTrackingState）
     tag::TagInitializer* mpTagInitializer;
     tag::TagTracker* mpTagTracker;
-    tag::TagMap* mpTagMap;  // 非拥有；由 System 创建并持有
     tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
 
     //BoW
@@ -392,6 +389,13 @@ protected:
     Sophus::SE3f mTlr;
 
     void newParameterLoader(Settings* settings);
+
+    // System.saveOnlinePose=1 时：OK 后每帧 append 一行 TUM (t tx ty tz qx qy qz qw, Twc)
+    void AppendOnlinePoseTUM();
+
+    bool mbSaveOnlinePose = false;
+    std::string mSaveOnlinePoseFile = "OnlineCameraTrajectory.txt";
+    std::ofstream mOnlinePoseFile;
 
 #ifdef REGISTER_LOOP
     bool Stop();

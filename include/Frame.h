@@ -65,8 +65,9 @@ public:
     // Copy constructor.
     Frame(const Frame &frame);
 
-    // Constructor for stereo cameras.
-    Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
+    // Constructor for stereo cameras (rectified / shared-K ORB path).
+    // pTagCameraRight：Tag 右目相机模型，双目必填（禁止回退左目）
+    Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), ua_tag::AprilTagDetector* pTagDetector = nullptr, GeometricCamera* pTagCameraRight = nullptr);
 
     // Constructor for RGB-D cameras.
     Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
@@ -80,8 +81,11 @@ public:
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1);
 
-    // Detect AprilTag corners and store into mTagFrameData (mono path).
-    void DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &im);
+    // Detect AprilTag corners into mTagFrameData.
+    // 单目：只传 imLeft；双目：左右都检测，右目必须提供 pCamRight 或 mpCamera2（禁止回退左目）
+    void DetectAndStoreTags(ua_tag::AprilTagDetector* pTagDetector, const cv::Mat &imLeft,
+                            const cv::Mat &imRight = cv::Mat(),
+                            GeometricCamera* pCamRight = nullptr);
 
     // Compute Bag of Words representation.
     void ComputeBoW();
@@ -101,10 +105,10 @@ public:
     Eigen::Matrix<float,3,3> GetImuRotation();
     Sophus::SE3<float> GetImuPose();
 
-    Sophus::SE3f GetRelativePoseTrl();
-    Sophus::SE3f GetRelativePoseTlr();
-    Eigen::Matrix3f GetRelativePoseTlr_rotation();
-    Eigen::Vector3f GetRelativePoseTlr_translation();
+    Sophus::SE3f GetRelativePoseTrl() const;
+    Sophus::SE3f GetRelativePoseTlr() const;
+    Eigen::Matrix3f GetRelativePoseTlr_rotation() const;
+    Eigen::Vector3f GetRelativePoseTlr_translation() const;
 
     void SetNewBias(const IMU::Bias &b);
 
@@ -172,20 +176,6 @@ public:
         return mbHasVelocity;
     }
 
-    // Tag 追踪求解的相机位姿（与 ORB 的 mTcw 独立）
-    void SetTagPose(const Sophus::SE3<float> &Tcw);
-    void ClearTagPose();
-
-    inline Sophus::SE3<float> GetTagPose() const {
-        return mTcwTag;
-    }
-
-    inline bool HasTagPose() const {
-        return mbHasTagPose;
-    }
-
-
-
 private:
     //Sophus/Eigen migration
     Sophus::SE3<float> mTcw;
@@ -194,10 +184,6 @@ private:
     Eigen::Matrix<float,3,3> mRcw;
     Eigen::Matrix<float,3,1> mtcw;
     bool mbHasPose;
-
-    // Tag tracking pose (camera -> Tag-map world), separate from ORB mTcw
-    Sophus::SE3<float> mTcwTag;
-    bool mbHasTagPose;
 
     //Rcw_ not necessary as Sophus has a method for extracting the rotation matrix: Tcw_.rotationMatrix()
     //tcw_ not necessary as Sophus has a method for extracting the translation vector: Tcw_.translation()
@@ -328,7 +314,8 @@ public:
     tag::TagFrameData mTagFrameData;
 
     // Tag 检测用图副本（原图灰度 + 可选 CLAHE；与 corners_raw 同域；Detector 共享缓冲需 clone）。
-    cv::Mat mImTagDetect;
+    cv::Mat mImTagDetect;       // 左目/单目
+    cv::Mat mImTagDetectRight;  // 右目（双目）
 
 #ifdef REGISTER_TIMES
     double mTimeORB_Ext;
@@ -375,7 +362,7 @@ public:
     //Grid for the right image
     std::vector<std::size_t> mGridRight[FRAME_GRID_COLS][FRAME_GRID_ROWS];
 
-    Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Sophus::SE3f& Tlr,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
+    Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Sophus::SE3f& Tlr,Frame* pPrevF = static_cast<Frame*>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), ua_tag::AprilTagDetector* pTagDetector = nullptr);
 
     //Stereo fisheye
     void ComputeStereoFishEyeMatches();

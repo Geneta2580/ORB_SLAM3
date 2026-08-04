@@ -42,6 +42,11 @@ namespace ORB_SLAM3
         bool Reconstruct(const std::vector<cv::KeyPoint>& vKeys1, const std::vector<cv::KeyPoint>& vKeys2, const std::vector<int> &vMatches12,
                           Sophus::SE3f &T21, std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);
 
+        // 已知相对位姿 T21，对匹配做三角化（复用 CheckRT）
+        int TriangulateWithPose(const std::vector<cv::KeyPoint>& vKeys1, const std::vector<cv::KeyPoint>& vKeys2,
+                                const std::vector<int> &vMatches12, const Sophus::SE3f &T21,
+                                std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated);
+
     private:
 
         void FindHomography(std::vector<bool> &vbMatchesInliers, float &score, Eigen::Matrix3f &H21);

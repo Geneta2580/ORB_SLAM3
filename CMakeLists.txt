@@ -95,8 +95,6 @@ src/Config.cc
 src/Settings.cc
 src/ua_tag/TagFrameData.cc
 src/ua_tag/MapTagData.cc
-src/ua_tag/TagKeyFrameDataBase.cc
-src/ua_tag/TagMap.cc
 src/ua_tag/TagInitializer.cc
 src/ua_tag/TagTracker.cc
 src/ua_tag/TagOptimizer.cc
@@ -134,8 +132,6 @@ include/Settings.h
 include/ua_tag/TagObservation.h
 include/ua_tag/TagFrameData.h
 include/ua_tag/MapTagData.h
-include/ua_tag/TagKeyFrameDataBase.h
-include/ua_tag/TagMap.h
 include/ua_tag/TagOptimizer.h
 include/ua_tag/TagMapExporter.h)
 
@@ -274,6 +270,10 @@ add_executable(mono_test_tag
         Examples/TagFusion/test/mono_test_tag.cc)
 target_link_libraries(mono_test_tag ${PROJECT_NAME})
 
+add_executable(test_map_tag_associations
+        Examples/TagFusion/test/test_map_tag_associations.cc)
+target_link_libraries(test_map_tag_associations ${PROJECT_NAME})
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/PennCOSYVIO)
 add_executable(mono_penncosyvio_tag
         Examples/TagFusion/PennCOSYVIO/mono_penncosyvio_tag.cc)
@@ -283,6 +283,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/XREA
 add_executable(mono_xreal_glass_tag
         Examples/TagFusion/XREAL_Glass/mono_xreal_glass_tag.cc)
 target_link_libraries(mono_xreal_glass_tag ${PROJECT_NAME})
+
+add_executable(stereo_xreal_glass_tag
+        Examples/TagFusion/XREAL_Glass/stereo_xreal_glass_tag.cc)
+target_link_libraries(stereo_xreal_glass_tag ${PROJECT_NAME})
 
 # ethz_apriltag2 CLI for Python scripts (same backend as ua_tag::AprilTagDetector)
 if(ORB_SLAM3_WITH_APRILTAG)

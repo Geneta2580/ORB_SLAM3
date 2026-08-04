@@ -52,6 +52,20 @@ Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer
         }
     }
 
+    // Tag 叠加开关：始终从 yaml 读（Settings 未托管这两项）
+    {
+        cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
+        if(fSettings.isOpened())
+        {
+            cv::FileNode n = fSettings["Viewer.showTagMap"];
+            if(!n.empty())
+                mbShowTagMap = static_cast<int>(n) != 0;
+            n = fSettings["Viewer.showTagKFs"];
+            if(!n.empty())
+                mbShowTagKFs = static_cast<int>(n) != 0;
+        }
+    }
+
     mbStopTrack = false;
 }
 
@@ -182,6 +196,8 @@ void Viewer::Run()
     pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames",true,true);
     pangolin::Var<bool> menuShowGraph("menu.Show Graph",false,true);
     pangolin::Var<bool> menuShowInertialGraph("menu.Show Inertial Graph",true,true);
+    pangolin::Var<bool> menuShowTagMap("menu.Show TagMap",mbShowTagMap,true);
+    pangolin::Var<bool> menuShowTagKFs("menu.Show Tag KFs",mbShowTagKFs,true);
     pangolin::Var<bool> menuLocalizationMode("menu.Localization Mode",false,true);
     pangolin::Var<bool> menuReset("menu.Reset",false,false);
     pangolin::Var<bool> menuStop("menu.Stop",false,false);
@@ -314,6 +330,8 @@ void Viewer::Run()
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph, menuShowInertialGraph, menuShowOptLba);
         if(menuShowPoints)
             mpMapDrawer->DrawMapPoints();
+        if(menuShowTagMap || menuShowTagKFs)
+            mpMapDrawer->DrawTagMap(menuShowTagMap, menuShowTagKFs);
 
         pangolin::FinishFrame();
 

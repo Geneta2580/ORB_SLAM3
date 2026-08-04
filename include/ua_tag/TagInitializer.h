@@ -6,7 +6,7 @@
 
 #include <array>
 #include <cstddef>
-#include <deque>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
@@ -19,6 +19,8 @@
 namespace ORB_SLAM3 {
 
 class GeometricCamera;
+class KeyFrame;
+class Map;
 
 namespace tag {
 
@@ -28,18 +30,30 @@ public:
     using MapTagPtr = std::shared_ptr<MapTagData>;
     using TagContainer = std::unordered_map<int, MapTagPtr>;
 
+    // 初始化模式：由 Tracking 按 mSensor 显式传入
+    enum class InitMode : std::uint8_t
+    {
+        Monocular = 0,     // 两帧路径（共视检查 / 单帧+第二帧 / 双帧联合）
+        Stereo = 1         // 单帧即可（STEREO / IMU_STEREO）
+    };
+
     // Tag 地图初始化结果
     struct Result
     {
         // 初始化完成的 Tag 地图实体
         TagContainer tags;
 
-        // 当前帧：Tag world -> Camera（单帧初始化时 world := 当前相机系，故为单位阵）
-        Sophus::SE3f Tcw_current;
+        // 各初始化帧的 Tag 位姿（Tag world -> Camera），与 keyframes 一一对应：
+        //   Stereo：{I}；Monocular 单帧+第二帧：{I, Tcw_2}；双帧联合：{I, T_21}
+        std::vector<Sophus::SE3f> Tcw_current;
 
-        // 初始化涉及的 Frame（已 SetTagPose；单帧 1 个，双帧为 ref + current）
-        // 供 TagMap 写入 TagKeyFrameDataBase
+        // 初始化涉及的 Frame（已 SetPose；历史字段，提交阶段以真实 KeyFrame 为准）：
+        //   Stereo：仅 first 一帧；Monocular：first + second 两帧
         std::vector<Frame> keyframes;
+
+        // true: 经单帧建图（Stereo，或 Monocular 单帧+第二帧 motion-only）；
+        // false: 双帧联合消歧
+        bool from_single_frame = false;
     };
 
     // 双视图 IPPE 联合消歧结果
@@ -71,22 +85,25 @@ public:
     // 从 settings yaml 读取 Tag.size、Tag.verbose
     explicit TagInitializer(const std::string &settingsFile);
 
-    // 初始化流程：
-    //   1) 始终先尝试单帧初始化
-    //   2) 单帧失败时：
-    //      - 无参考帧：将当前帧设为参考帧
-    //      - 有参考帧且共同 Tag id >= 2：尝试双帧初始化
-    //          * 双帧失败：保留原参考帧不动
-    //      - 有参考帧但共同 Tag 过少：将参考帧切换为当前帧
-    //   3) 成功则填充 result 并清空参考帧
-    bool TryInitialize(Frame &frame, Result &result);
+    // 仅计算：写 Result + 必要时回写 Frame 消歧/位姿；不写入 Map / 不关联 KeyFrame。
+    // 必须在 new KeyFrame(Frame) 之前调用，以便 KF 拷贝到最终 TagFrameData。
+    //   Stereo：忽略 second_frame，仅对 first_frame 做单帧建图
+    //   Monocular：
+    //     0) 先检查 first/second 共视 Tag 是否 >= kMinCommonTagsForTwoFrame，不足则失败
+    //     1) 对 first_frame 单帧建图，成功后再用 motion-only BA 估计 second_frame 并注册两帧
+    //     2) 上述失败则用已算好的共视做双帧联合初始化
+    bool TryInitialize(Frame &first_frame, Frame &second_frame, Result &result,
+                       InitMode mode);
 
-    void Clear();
+    // 仅提交：将 Result 中的 MapTag 写入 ORB Map，并与真实 KeyFrame 建立双向关联。
+    // 必须在 KeyFrame 已创建且 AddKeyFrame 之后、InsertKeyFrame 之前调用。
+    // 成功则 SetTagInitialized(true)；中途失败会回滚已插入的 MapTag。
+    bool CommitTagInitialization(const Result &result, Map *pMap,
+                                 const std::vector<KeyFrame *> &vpKFs) const;
 
-    const std::deque<Frame> &GetInitFrames() const noexcept
-    {
-        return mInitFrames;
-    }
+    // 单帧：frame 中无歧义/有效 IPPE 的 Tag 数 >= 3 则成功。
+    // Stereo 与 Monocular 单帧子路径内部调用。
+    bool TryInitializeSingleFrame(Frame &frame, Result &result);
 
 private:
     // tag_id -> 已有两个有效 IPPE 候选的观测（不要求已消歧）
@@ -94,7 +111,7 @@ private:
     // tag_id -> 无歧义且有效 IPPE 的观测
     using UnambiguousObsMap = std::unordered_map<int, const TagObservation *>;
 
-    // 同一 tag_id 在两帧中的观测对（cur = 当前帧，ref = 参考帧）
+    // 同一 tag_id 在两帧中的观测对（cur = second，ref = first）
     struct CommonTagPair
     {
         const TagObservation *cur = nullptr;
@@ -115,14 +132,14 @@ private:
 
     static UnambiguousObsMap CollectUnambiguousObservations(const Frame &frame);
 
-    // 查找当前帧与参考帧之间共同 id 的 Tag 观测对
+    // 查找 second 与 first 之间共同 id 的 Tag 观测对
     static CommonTagObsMap FindCommonTagObservations(const Frame &frame,
                                                      const Frame &ref_frame);
 
-    // 共同观测 Tag 的去畸变角点在参考帧与当前帧之间的平均欧式像素位移
+    // 共同观测 Tag 的去畸变角点在两帧之间的平均欧式像素位移
     static float ComputeMeanCornerPixelDisplacement(const CommonTagObsMap &common_obs);
 
-    // 用 GeometricCamera::project 计算 Tag 四角点相对观测的 RMSE（单位：像素）
+    // GeometricCamera::project vs corners_raw（原图像素）的 RMSE
     static float ComputeTagCornerReprojRmse(const Sophus::SE3f &T_ct,
                                             const std::array<cv::Point2f, 4> &corners_obs,
                                             GeometricCamera *pCamera,
@@ -135,19 +152,15 @@ private:
                                      GeometricCamera *pCamera,
                                      TwoViewAmbiguityResult &out) const;
 
-    // 单帧：当前帧中无歧义/有效 IPPE 的 Tag 数 >= 3 则成功
-    // Tag world 固定为当前帧相机系；IPPE 的 T_ct 即为 T_wt，Tcw_current = I
-    bool TryInitializeSingleFrame(Frame &frame, Result &result);
+    // 单帧建图成功后：motion-only BA 估计 second_frame 位姿，并像双帧一样注册两帧
+    // （Tcw_current={I,Tcw_2}，keyframes 两帧，tags 上追加 second 观测）
+    bool CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
+                                                Frame &second_frame,
+                                                Result &result);
 
-    // 双帧：当前帧 + 参考帧联合初始化（common_obs 由调用方预先计算）
+    // 双帧：first_frame + second_frame 联合初始化（common_obs 由调用方预先计算）
     bool TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
                                 const CommonTagObsMap &common_obs, Result &result);
-
-    // 设置 / 切换双帧初始化的参考帧（仅保留一帧）
-    void SetReferenceFrame(const Frame &frame);
-
-    // 参考帧缓存（至多一帧）
-    std::deque<Frame> mInitFrames;
 
     // 从 settings yaml 的 Tag.size 读取（米）
     double mTagSize = 0.16;

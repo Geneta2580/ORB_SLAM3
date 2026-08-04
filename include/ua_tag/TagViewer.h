@@ -2,7 +2,6 @@
 #define UA_TAG_TAG_VIEWER_H
 
 #include "ua_tag/TagFrameData.h"
-#include "ua_tag/TagTracking.h"
 
 #include <array>
 #include <atomic>
@@ -16,9 +15,10 @@
 #include <sophus/se3.hpp>
 
 namespace ORB_SLAM3 {
-namespace tag {
 
-class TagMap;
+class Map;
+
+namespace tag {
 
 // Tag 专用可视化：左 AprilTag 检测图，右 Tag 地图 + 相机轨迹（独立 Pangolin 窗口）
 class TagViewer
@@ -34,14 +34,19 @@ public:
     void RequestFinish();
     bool isFinished() const;
 
-    // TagTrack 结束后调用：内部拷贝图像/位姿/TagMap 快照，不持有外部指针
+    // 冻结后忽略后续 Update（用于只展示初始化两帧 pose + MapTag）
+    void Freeze();
+    bool IsFrozen() const;
+
+    // 内部拷贝图像/位姿/MapTag 快照，不持有外部指针
+    // tracking_state: Tracking::eTrackingState
     void Update(const cv::Mat &image,
                 const TagFrameData &frame_data,
                 bool has_pose,
                 const Sophus::SE3f &Tcw,
                 unsigned long frame_id,
-                TagMap *tag_map,
-                TagTrackingState state);
+                Map *pMap,
+                int tracking_state);
 
 private:
     struct TagVis
@@ -69,12 +74,13 @@ private:
     bool mbHasPose = false;
     Sophus::SE3f mTcw;
     unsigned long mnFrameId = 0;
-    TagTrackingState mState = TagTrackingState::NOT_INITIALIZED;
+    int mTrackingState = 1;  // Tracking::NOT_INITIALIZED
     std::vector<TagVis> mTags;
     std::vector<Sophus::SE3f> mKfTwc;
 
     std::atomic<bool> mbFinishRequested{false};
     std::atomic<bool> mbFinished{true};
+    std::atomic<bool> mbFrozen{false};
     std::thread mThread;
 
     float mCameraSize = 0.08f;

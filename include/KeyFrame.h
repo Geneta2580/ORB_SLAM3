@@ -34,6 +34,8 @@
 #include "ua_tag/TagFrameData.h"
 
 #include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/vector.hpp>
@@ -49,6 +51,10 @@ class Frame;
 class KeyFrameDatabase;
 
 class GeometricCamera;
+
+namespace tag {
+class MapTagData;
+}
 
 class KeyFrame
 {
@@ -258,6 +264,23 @@ public:
     int TrackedMapPoints(const int &minObs);
     MapPoint* GetMapPoint(const size_t &idx);
 
+    // MapTag 关联：角点测量只在 mTagFrameData；此处存 MapTag* + 左右观测索引
+    // 所有权：MapTagData* 非拥有；完整双向更新只允许经本类接口
+    struct MapTagAssociation
+    {
+        tag::MapTagData *pMapTag = nullptr;
+        int leftObservationIndex = -1;
+        int rightObservationIndex = -1;
+    };
+
+    bool AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex);
+    void EraseMapTag(int tagId);
+    void EraseAllMapTags();
+    tag::MapTagData *GetMapTag(int tagId) const;
+    std::vector<tag::MapTagData *> GetMapTagMatches() const;
+    bool GetMapTagAssociation(int tagId, MapTagAssociation &association) const;
+    std::unordered_map<int, MapTagAssociation> GetMapTagAssociations() const;
+
     // KeyPoint functions
     std::vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r, const bool bRight = false) const;
     bool UnprojectStereo(int i, Eigen::Vector3f &x3D);
@@ -272,6 +295,10 @@ public:
     // Set/check bad flag
     void SetBadFlag();
     bool isBad();
+
+    // Tag 米制初始化：固定位姿，防止后续 BA 漂尺度
+    void SetFixedPose(bool flag) { mbFixedPose = flag; }
+    bool IsFixedPose() const { return mbFixedPose; }
 
     // Compute Scene Depth (q=2 median). Used in monocular.
     float ComputeSceneMedianDepth(const int q);
@@ -420,6 +447,7 @@ public:
     int mnDataset;
 
     // AprilTag observations copied from the source Frame at keyframe creation.
+    // 唯一 Tag 角点测量源。
     tag::TagFrameData mTagFrameData;
 
     std::vector <KeyFrame*> mvpLoopCandKFs;
@@ -454,6 +482,9 @@ protected:
     // For save relation without pointer, this is necessary for save/load function
     std::vector<long long int> mvBackupMapPointsId;
 
+    // tag_id -> MapTag 关联（与 MapTagData 观测双向；裸指针非拥有）
+    std::unordered_map<int, MapTagAssociation> mMapTagAssociations;
+
     // BoW
     KeyFrameDatabase* mpKeyFrameDB;
     ORBVocabulary* mpORBvocabulary;
@@ -482,7 +513,10 @@ protected:
     // Bad flags
     bool mbNotErase;
     bool mbToBeErased;
-    bool mbBad;    
+    bool mbBad;
+
+    // Tag 米制初始化：为 true 时 Local/Global BA 中固定该 KF 位姿，防止尺度被漂掉
+    bool mbFixedPose;
 
     float mHalfBaseline; // Only for visualization
 
@@ -502,7 +536,7 @@ protected:
     // Mutex
     std::mutex mMutexPose; // for pose, velocity and biases
     std::mutex mMutexConnections;
-    std::mutex mMutexFeatures;
+    mutable std::mutex mMutexFeatures;
     std::mutex mMutexMap;
 
 public:

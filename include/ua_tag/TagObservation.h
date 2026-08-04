@@ -81,6 +81,19 @@ struct TagObservation
     }
 };
 
+// 将观测相机系下的 Tag 位姿表达到左目系：
+//   左目/单目：T_cL_t = T_ct
+//   右目：T_cL_t = T_lr * T_cR_t（ORB mTlr：P_left = T_lr * P_right）
+// 再经左目 Twc 得到世界系：T_wt = Twc * T_cL_t
+inline Sophus::SE3f ExpressTagPoseInLeftCamera(CameraId camera_id,
+                                               const Sophus::SE3f &T_ct,
+                                               const Sophus::SE3f &T_lr)
+{
+    if(camera_id == CameraId::RIGHT)
+        return T_lr * T_ct;
+    return T_ct;
+}
+
 }  // namespace tag
 }  // namespace ORB_SLAM3
 

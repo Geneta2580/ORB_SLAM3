@@ -4,16 +4,19 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
+#include <Eigen/Core>
 #include <sophus/se3.hpp>
 
 namespace ORB_SLAM3 {
 
 class Frame;
+class Map;
 
 namespace tag {
 
-class TagMap;
 class TagMapExporter;
 
 class TagTracker
@@ -28,11 +31,9 @@ public:
     TagTracker(const TagTracker &) = delete;
     TagTracker &operator=(const TagTracker &) = delete;
 
-    // 在已有 TagMap 上跟踪当前帧
-    bool Track(Frame &frame, TagMap &tag_map);
-
-    // Tag 跟踪丢失后的重定位
-    bool Relocalize(Frame &frame, TagMap &tag_map);
+    // 休眠跟踪接口（尚未接入 Tracking 主循环；签名已切到 Map）
+    bool Track(Frame &frame, Map &map);
+    bool Relocalize(Frame &frame, Map &map);
 
     // 初始化成功后写入首帧位姿缓存（尚无速度）
     void SeedLastPose(const Sophus::SE3f &Tcw);
@@ -40,16 +41,21 @@ public:
     // 清空位姿/速度/参考关键帧临时缓存（跟踪失败或重置时调用）
     void ClearMotionCache();
 
-    // 若开启导出：记录当前帧 TagPose 轨迹
+    // 若开启导出：记录当前帧相机 Pose 轨迹
     void LogCameraPose(const Frame &frame);
 
-    // 若开启导出：写出 TagMap 四角点，并关闭轨迹文件
-    void SaveExports(const TagMap &tag_map);
+    // 若开启导出：写出 MapTag 四角点，并关闭轨迹文件
+    void SaveExports(Map &map);
+
+    // 若开启导出：定标后立刻写出 MapTag + ORB 初始化点云/关键帧（尺度对比用）
+    bool SaveInitMaps(Map &map,
+                      const std::vector<Eigen::Vector3f> &orb_points,
+                      const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw);
 
     long unsigned int GetReferenceKeyFrameId() const noexcept { return mnReferenceKFId; }
     bool HasReferenceKeyFrame() const noexcept { return mbHasReferenceKF; }
 
-    // 是否启用条件 3：与参考 KF 的 baseline 判定
+    // 是否启用条件 3：可选参考 KF baseline 判定（休眠路径）
     void SetCheckRefKFBaseline(bool enable) noexcept { mbCheckRefKFBaseline = enable; }
     bool GetCheckRefKFBaseline() const noexcept { return mbCheckRefKFBaseline; }
 
@@ -57,42 +63,24 @@ public:
     void SetMinBaseLine(float meters) noexcept { mMinBaseLine = meters; }
 
 private:
-    // 用缓存的匀速模型预测当前帧位姿；无效时返回 nullopt（由 Track 写入 Frame.TagPose）
     std::optional<Sophus::SE3f> PredictPoseWithMotionModel() const;
-
-    // 为当前帧选择参考 Tag 关键帧：取与当前帧共视 Tag 数最高的历史 KF
-    void SelectReferenceKeyFrame(const Frame &frame, TagMap &tag_map);
-
-    // 关键帧判定（任一条件满足即为关键帧）：
-    // 1) 当前帧观测到 TagMap 中尚不存在的 Tag
-    // 2) 某 FIXED Tag：观测 KF 数 < maxVisibleFramesPerMarker，且相对已有观测 KF
-    //    的相机平移距离 ≥ minBaseLine（为该 Tag 增加新视角）
-    // 3) [可选] 与参考 KF 的 baseline > minBaseLine
-    bool NeedNewKeyFrame(const Frame &frame, const TagMap &tag_map) const;
-
-    // 用当前帧位姿更新上一帧 Pose 与 Velocity 缓存
+    void SelectReferenceKeyFrame(const Frame &frame, Map &map);
+    bool NeedNewKeyFrame(const Frame &frame, const Map &map) const;
     void UpdateMotionCache(const Sophus::SE3f &Tcw_current);
 
-    // 上一帧相机位姿（Tag world -> Camera）
     Sophus::SE3f mLastTcw;
     bool mbHasLastTcw{false};
 
-    // 上一帧相对运动：Tcw_cur * Twc_last（与 Tracking::mVelocity 同构）
     Sophus::SE3f mVelocity;
     bool mbHasVelocity{false};
 
-    // 当前帧参考 Tag 关键帧（存 Frame::mnId）
     long unsigned int mnReferenceKFId{0};
     bool mbHasReferenceKF{false};
 
-    // 每个 Tag 最多关联的观测关键帧数
     int mnMaxVisibleFramesPerMarker{10};
-    // 新视角 / 参考 KF baseline 最小平移（米）
     float mMinBaseLine{0.07f};
-    // 是否启用与参考 KF 的 baseline 关键帧条件
     bool mbCheckRefKFBaseline{false};
 
-    // 从 settings yaml 的 Tag.verbose 读取；为 true 时打印跟踪/关键帧日志
     bool mbVerbose{false};
 
     std::unique_ptr<TagMapExporter> mpExporter;

@@ -1,8 +1,9 @@
 #include "ua_tag/TagViewer.h"
 
-#include "Frame.h"
+#include "KeyFrame.h"
+#include "Map.h"
 #include "ua_tag/AprilTagVisualizer.h"
-#include "ua_tag/TagMap.h"
+#include "ua_tag/MapTagData.h"
 
 #include <opencv2/imgproc.hpp>
 #include <pangolin/gl/glfont.h>
@@ -87,6 +88,16 @@ bool TagViewer::isFinished() const
     return mbFinished.load();
 }
 
+void TagViewer::Freeze()
+{
+    mbFrozen = true;
+}
+
+bool TagViewer::IsFrozen() const
+{
+    return mbFrozen.load();
+}
+
 bool TagViewer::CheckFinish()
 {
     return mbFinishRequested.load();
@@ -102,9 +113,12 @@ void TagViewer::Update(const cv::Mat &image,
                        bool has_pose,
                        const Sophus::SE3f &Tcw,
                        unsigned long frame_id,
-                       TagMap *tag_map,
-                       TagTrackingState state)
+                       Map *pMap,
+                       int tracking_state)
 {
+    if(mbFrozen.load())
+        return;
+
     cv::Mat vis = ua_tag::DrawTags(image, frame_data);
     if(vis.empty() && !image.empty())
     {
@@ -114,10 +128,33 @@ void TagViewer::Update(const cv::Mat &image,
             vis = image.clone();
     }
 
-    char overlay[96];
-    std::snprintf(overlay, sizeof(overlay), "frame:%lu  tags:%zu  state:%s",
-                  frame_id, frame_data.Size(),
-                  state == TagTrackingState::OK ? "OK" : "NOT_INIT");
+    // Tracking::eTrackingState: NOT_INITIALIZED=1, OK=2, RECENTLY_LOST=3, LOST=4
+    const char *state_str = "OTHER";
+    if(tracking_state == 1)
+        state_str = "NOT_INIT";
+    else if(tracking_state == 2)
+        state_str = "OK";
+    else if(tracking_state == 3)
+        state_str = "RECENTLY_LOST";
+    else if(tracking_state == 4)
+        state_str = "LOST";
+    else if(tracking_state == 0)
+        state_str = "NO_IMAGES";
+
+    const std::size_t n_map_tags = pMap ? pMap->MapTagsInMap() : 0;
+    std::size_t n_tag_kf = 0;
+    if(pMap)
+    {
+        for(KeyFrame *pKF : pMap->GetAllKeyFrames())
+        {
+            if(pKF && !pKF->isBad() && !pKF->GetMapTagMatches().empty())
+                ++n_tag_kf;
+        }
+    }
+    char overlay[128];
+    std::snprintf(overlay, sizeof(overlay),
+                  "frame:%lu  det:%zu  map_tags:%zu  tag_kf:%zu  state:%s",
+                  frame_id, frame_data.Size(), n_map_tags, n_tag_kf, state_str);
     if(!vis.empty())
     {
         cv::putText(vis, overlay, cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX,
@@ -136,16 +173,16 @@ void TagViewer::Update(const cv::Mat &image,
 
     std::vector<TagVis> tags;
     std::vector<Sophus::SE3f> kf_twc;
-    if(tag_map)
+    if(pMap)
     {
-        const auto map_tags = tag_map->GetAllTags();
+        const auto map_tags = pMap->GetAllMapTags();
         tags.reserve(map_tags.size());
         for(const auto &map_tag : map_tags)
         {
             if(!map_tag)
                 continue;
             TagVis tv;
-            tv.id = map_tag->tag_id;
+            tv.id = map_tag->Id();
             tv.fixed = map_tag->IsFixed();
             tv.has_pose = map_tag->HasPose();
             tv.has_corners = map_tag->HasWorldCorners();
@@ -156,12 +193,15 @@ void TagViewer::Update(const cv::Mat &image,
             tags.push_back(tv);
         }
 
-        const auto &kf_db = tag_map->GetKeyFrameDataBase();
-        kf_twc.reserve(kf_db.Size());
-        for(const Frame &kf : kf_db.GetAll())
+        const auto kfs = pMap->GetAllKeyFrames();
+        kf_twc.reserve(kfs.size());
+        for(KeyFrame *pKF : kfs)
         {
-            if(kf.HasTagPose())
-                kf_twc.push_back(kf.GetTagPose().inverse());
+            if(!pKF || pKF->isBad())
+                continue;
+            if(pKF->GetMapTagMatches().empty())
+                continue;
+            kf_twc.push_back(pKF->GetPoseInverse());
         }
     }
 
@@ -171,7 +211,7 @@ void TagViewer::Update(const cv::Mat &image,
         mbHasPose = has_pose;
         mTcw = Tcw;
         mnFrameId = frame_id;
-        mState = state;
+        mTrackingState = tracking_state;
         mTags = std::move(tags);
         mKfTwc = std::move(kf_twc);
     }

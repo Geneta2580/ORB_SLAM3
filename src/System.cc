@@ -20,7 +20,6 @@
 
 #include "System.h"
 #include "Converter.h"
-#include "ua_tag/TagMap.h"
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
@@ -41,7 +40,7 @@ Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer, const int initFr, const string &strSequence):
-    mSensor(sensor), mpTagMap(nullptr), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
+    mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
     mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
 {
     // Output welcome message
@@ -178,10 +177,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         //usleep(10*1000*1000);
     }
 
-    // Create TagMap (empty; content filled after Tag tracking initializes)
-    cout << "Initialization of TagMap" << endl;
-    mpTagMap = new tag::TagMap(strSettingsFile);
-
     if (mSensor==IMU_STEREO || mSensor==IMU_MONOCULAR || mSensor==IMU_RGBD)
         mpAtlas->SetInertialSensor();
 
@@ -193,7 +188,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, mpTagMap, strSequence);
+                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
@@ -229,15 +224,28 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     //usleep(10*1000*1000);
 
-    //Initialize the Viewer thread and launch
-    if(bUseViewer)
-    //if(false) // TODO
+    // Initialize the Viewer thread and launch
+    // Viewer.enable（yaml）优先：有则覆盖构造参数；无则沿用 bUseViewer
+    bool bViewerEnabled = bUseViewer;
+    {
+        cv::FileNode nodeViewerEnable = fsSettings["Viewer.enable"];
+        if(!nodeViewerEnable.empty())
+            bViewerEnabled = static_cast<int>(nodeViewerEnable) != 0;
+        else if(settings_)
+            bViewerEnabled = bUseViewer && settings_->viewerEnable();
+    }
+    if(bViewerEnabled)
     {
         mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile,settings_);
         mptViewer = new thread(&Viewer::Run, mpViewer);
         mpTracker->SetViewer(mpViewer);
         mpLoopCloser->mpViewer = mpViewer;
         mpViewer->both = mpFrameDrawer->both;
+        cout << "ORB Viewer enabled" << endl;
+    }
+    else
+    {
+        cout << "ORB Viewer disabled" << endl;
     }
 
     // Fix verbosity
@@ -555,12 +563,9 @@ void System::Shutdown()
         SaveAtlas(FileType::BINARY_FILE);
     }
 
-    // 导出 TagMap 四角点与相机轨迹（需在 delete mpTagMap 之前）
+    // 导出 MapTag 四角点与相机轨迹
     if(mpTracker)
         mpTracker->SaveTagExports();
-
-    delete mpTagMap;
-    mpTagMap = nullptr;
 
     /*if(mpViewer)
         pangolin::BindToContext("ORB-SLAM2: Map Viewer");*/
@@ -580,11 +585,13 @@ bool System::isShutDown() {
 void System::SaveTrajectoryTUM(const string &filename)
 {
     cout << endl << "Saving camera trajectory to " << filename << " ..." << endl;
-    if(mSensor==MONOCULAR)
+    /* TagFusion / XREAL Glass 等单目评测需要与 TUM/真值相同的「秒」时间戳。
+       原先禁止 monocular；与 SaveTrajectoryEuRoC 一样放开。 */
+    /*if(mSensor==MONOCULAR)
     {
         cerr << "ERROR: SaveTrajectoryTUM cannot be used for monocular." << endl;
         return;
-    }
+    }*/
 
     vector<KeyFrame*> vpKFs = mpAtlas->GetAllKeyFrames();
     sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);

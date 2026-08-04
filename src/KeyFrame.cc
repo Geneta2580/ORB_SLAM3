@@ -19,6 +19,7 @@
 #include "KeyFrame.h"
 #include "Converter.h"
 #include "ImuTypes.h"
+#include "ua_tag/MapTagData.h"
 #include<mutex>
 
 namespace ORB_SLAM3
@@ -57,7 +58,7 @@ KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
     mImuCalib(F.mImuCalib), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
     mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mDistCoef(F.mDistCoef), mbNotErase(false), mnDataset(F.mnDataset),
     mTagFrameData(F.mTagFrameData),
-    mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap), mbCurrentPlaceRecognition(false), mNameFile(F.mNameFile), mnMergeCorrectedForKF(0),
+    mbToBeErased(false), mbBad(false), mbFixedPose(false), mHalfBaseline(F.mb/2), mpMap(pMap), mbCurrentPlaceRecognition(false), mNameFile(F.mNameFile), mnMergeCorrectedForKF(0),
     mpCamera(F.mpCamera), mpCamera2(F.mpCamera2),
     mvLeftToRightMatch(F.mvLeftToRightMatch),mvRightToLeftMatch(F.mvRightToLeftMatch), mTlr(F.GetRelativePoseTlr()),
     mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright), mTrl(F.GetRelativePoseTrl()), mnNumberOfOpt(0), mbHasVelocity(false)
@@ -299,6 +300,135 @@ void KeyFrame::AddMapPoint(MapPoint *pMP, const size_t &idx)
 {
     unique_lock<mutex> lock(mMutexFeatures);
     mvpMapPoints[idx]=pMP;
+}
+
+bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
+{
+    if(!pTag)
+        return false;
+
+    Map *pMapKF = GetMap();
+    if(!pMapKF || pTag->GetMap() != pMapKF)
+        return false;
+
+    const int tag_id = pTag->Id();
+    if(tag_id < 0)
+        return false;
+
+    if(leftIndex < 0 && rightIndex < 0)
+        return false;
+
+    if(leftIndex >= static_cast<int>(mTagFrameData.left.size()))
+        return false;
+    if(rightIndex >= static_cast<int>(mTagFrameData.right.size()))
+        return false;
+
+    if(leftIndex >= 0 && mTagFrameData.left[leftIndex].tag_id != tag_id)
+        return false;
+    if(rightIndex >= 0 && mTagFrameData.right[rightIndex].tag_id != tag_id)
+        return false;
+
+    int final_left = leftIndex;
+    int final_right = rightIndex;
+
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        auto it = mMapTagAssociations.find(tag_id);
+        if(it != mMapTagAssociations.end())
+        {
+            if(it->second.pMapTag != pTag)
+                return false;  // 同 ID 不同 MapTag：拒绝静默覆盖
+
+            // 相同 MapTag：合并左右索引（新有效索引覆盖旧值）
+            final_left = (leftIndex >= 0) ? leftIndex : it->second.leftObservationIndex;
+            final_right = (rightIndex >= 0) ? rightIndex : it->second.rightObservationIndex;
+
+            if(final_left == it->second.leftObservationIndex &&
+               final_right == it->second.rightObservationIndex)
+                return true;  // 幂等
+        }
+
+        MapTagAssociation assoc;
+        assoc.pMapTag = pTag;
+        assoc.leftObservationIndex = final_left;
+        assoc.rightObservationIndex = final_right;
+        mMapTagAssociations[tag_id] = assoc;
+    }
+
+    // 建立 Tag 与 KF 的关联，把KF的指针给MapTag，这样MapTag就可以通过KF的指针找到KF
+    pTag->AddObservationInternal(this, final_left, final_right);
+    return true;
+}
+
+void KeyFrame::EraseMapTag(int tagId)
+{
+    tag::MapTagData *pTag = nullptr;
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        auto it = mMapTagAssociations.find(tagId);
+        if(it == mMapTagAssociations.end())
+            return;
+        pTag = it->second.pMapTag;
+        mMapTagAssociations.erase(it);
+    }
+
+    if(pTag)
+        pTag->EraseObservationInternal(this);
+}
+
+void KeyFrame::EraseAllMapTags()
+{
+    std::vector<tag::MapTagData *> tags;
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        tags.reserve(mMapTagAssociations.size());
+        for(const auto &kv : mMapTagAssociations)
+        {
+            if(kv.second.pMapTag)
+                tags.push_back(kv.second.pMapTag);
+        }
+        mMapTagAssociations.clear();
+    }
+
+    for(tag::MapTagData *pTag : tags)
+        pTag->EraseObservationInternal(this);
+}
+
+tag::MapTagData *KeyFrame::GetMapTag(int tagId) const
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    const auto it = mMapTagAssociations.find(tagId);
+    return (it == mMapTagAssociations.end()) ? nullptr : it->second.pMapTag;
+}
+
+std::vector<tag::MapTagData *> KeyFrame::GetMapTagMatches() const
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    std::vector<tag::MapTagData *> out;
+    out.reserve(mMapTagAssociations.size());
+    for(const auto &kv : mMapTagAssociations)
+    {
+        if(kv.second.pMapTag)
+            out.push_back(kv.second.pMapTag);
+    }
+    return out;
+}
+
+bool KeyFrame::GetMapTagAssociation(int tagId, MapTagAssociation &association) const
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    const auto it = mMapTagAssociations.find(tagId);
+    if(it == mMapTagAssociations.end())
+        return false;
+    association = it->second;
+    return true;
+}
+
+std::unordered_map<int, KeyFrame::MapTagAssociation>
+KeyFrame::GetMapTagAssociations() const
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    return mMapTagAssociations;
 }
 
 void KeyFrame::EraseMapPointMatch(const int &idx)
@@ -598,6 +728,8 @@ void KeyFrame::SetBadFlag()
             mvpMapPoints[i]->EraseObservation(this);
         }
     }
+
+    EraseAllMapTags();
 
     {
         unique_lock<mutex> lock(mMutexConnections);

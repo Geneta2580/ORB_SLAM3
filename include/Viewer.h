@@ -82,6 +82,10 @@ private:
 
     float mViewpointX, mViewpointY, mViewpointZ, mViewpointF;
 
+    // Viewer.showTagMap / Viewer.showTagKFs（yaml，缺省 true / false）
+    bool mbShowTagMap = true;
+    bool mbShowTagKFs = false;
+
     bool CheckFinish();
     void SetFinish();
     bool mbFinishRequested;

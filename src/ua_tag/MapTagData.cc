@@ -1,27 +1,60 @@
 #include "ua_tag/MapTagData.h"
 
-#include <utility>
-
 namespace ORB_SLAM3 {
 namespace tag {
 
-void MapTagData::SetPose(const Sophus::SE3f &T_wt_)
+int MapTagData::Id() const
 {
-    T_wt = T_wt_;
-    has_pose = true;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mnId;
 }
 
-bool MapTagData::UpdateWorldCorners(double tag_size)
+void MapTagData::SetId(int id)
 {
-    if(!has_pose || tag_size <= 0.0)
-    {
-        has_corners_world = false;
-        return false;
-    }
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    mnId = id;
+}
 
-    // 与 OpenCV IPPE_SQUARE / ua_tag::BuildSquareObjectPoints 约定一致：
-    // (-s/2,s/2,0), (s/2,s/2,0), (s/2,-s/2,0), (-s/2,-s/2,0)
-    const float h = static_cast<float>(tag_size) * 0.5f;
+float MapTagData::GetTagSize() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mTagSize;
+}
+
+void MapTagData::SetTagSize(float tag_size)
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    mTagSize = tag_size;
+}
+
+void MapTagData::SetPose(const Sophus::SE3f &T_wt)
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    mTwt = T_wt;
+    mbHasPose = true;
+}
+
+Sophus::SE3f MapTagData::GetPose() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mTwt;
+}
+
+bool MapTagData::HasPose() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mbHasPose;
+}
+
+std::array<Eigen::Vector3f, 4> MapTagData::GetWorldCorners() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    std::array<Eigen::Vector3f, 4> corners{};
+    if(!mbHasPose || mTagSize <= 0.0f)
+        return corners;
+
+    // 与 OpenCV IPPE_SQUARE / BuildSquareObjectPoints 约定一致
+    const float h = mTagSize * 0.5f;
     const Eigen::Vector3f pts_t[4] = {
         Eigen::Vector3f(-h,  h, 0.f),
         Eigen::Vector3f( h,  h, 0.f),
@@ -29,55 +62,89 @@ bool MapTagData::UpdateWorldCorners(double tag_size)
         Eigen::Vector3f(-h, -h, 0.f)};
 
     for(int i = 0; i < 4; ++i)
-        corners_world[i] = T_wt * pts_t[i];
-
-    has_corners_world = true;
-    return true;
+        corners[i] = mTwt * pts_t[i];
+    return corners;
 }
 
-void MapTagData::AddObservation(TagKeyFrameId tag_kf_id, TagObservation observation)
+bool MapTagData::HasWorldCorners() const
 {
-    observations[tag_kf_id].push_back(std::move(observation));
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mbHasPose && mTagSize > 0.0f;
 }
 
-void MapTagData::SetObservations(TagKeyFrameId tag_kf_id, Observations obs)
+void MapTagData::SetState(MapTagState state)
 {
-    observations[tag_kf_id] = std::move(obs);
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    mState = state;
 }
 
-void MapTagData::EraseObservations(TagKeyFrameId tag_kf_id)
+MapTagState MapTagData::GetState() const
 {
-    observations.erase(tag_kf_id);
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mState;
 }
 
-const MapTagData::Observations *MapTagData::FindObservations(TagKeyFrameId tag_kf_id) const noexcept
+bool MapTagData::IsFixed() const
 {
-    const auto it = observations.find(tag_kf_id);
-    return (it == observations.end()) ? nullptr : &it->second;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mState == MapTagState::FIXED_ANCHOR;
 }
 
-MapTagData::Observations *MapTagData::FindObservations(TagKeyFrameId tag_kf_id) noexcept
+bool MapTagData::IsBad() const
 {
-    auto it = observations.find(tag_kf_id);
-    return (it == observations.end()) ? nullptr : &it->second;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mState == MapTagState::BAD;
 }
 
-bool MapTagData::HasTagKeyFrame(TagKeyFrameId tag_kf_id) const noexcept
+Map *MapTagData::GetMap() const
 {
-    return observations.find(tag_kf_id) != observations.end();
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mpMap;
 }
 
-void MapTagData::ClearObservations()
+void MapTagData::SetMapInternal(Map *pMap)
 {
-    observations.clear();
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    mpMap = pMap;
 }
 
-std::size_t MapTagData::NumObservations() const noexcept
+void MapTagData::AddObservationInternal(KeyFrame *pKF, int leftIndex, int rightIndex)
 {
-    std::size_t n = 0;
-    for(const auto &kv : observations)
-        n += kv.second.size();
-    return n;
+    if(!pKF)
+        return;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    KeyFrameObservation obs;
+    obs.leftIndex = leftIndex;
+    obs.rightIndex = rightIndex;
+    mObservations[pKF] = obs;
+}
+
+void MapTagData::EraseObservationInternal(KeyFrame *pKF)
+{
+    if(!pKF)
+        return;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    mObservations.erase(pKF);
+}
+
+bool MapTagData::IsInKeyFrame(KeyFrame *pKF) const
+{
+    if(!pKF)
+        return false;
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mObservations.find(pKF) != mObservations.end();
+}
+
+MapTagData::KeyFrameObservations MapTagData::GetObservations() const
+{
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mObservations;
+}
+
+std::size_t MapTagData::Observations() const
+{
+    std::unique_lock<std::mutex> lock(mMutexFeatures);
+    return mObservations.size();
 }
 
 }  // namespace tag

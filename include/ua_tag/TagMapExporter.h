@@ -3,15 +3,19 @@
 
 #include <fstream>
 #include <string>
+#include <utility>
+#include <vector>
 
+#include <Eigen/Core>
 #include <sophus/se3.hpp>
 
 namespace ORB_SLAM3 {
+
+class Map;
+
 namespace tag {
 
-class TagMap;
-
-// 导出 TagMap 世界系四角点与相机 TagPose 轨迹
+// 导出 Map 中 MapTag 世界系四角点与关联关键帧相机 Pose
 class TagMapExporter
 {
 public:
@@ -30,8 +34,17 @@ public:
                           double timestamp,
                           const Sophus::SE3f &Tcw);
 
-    // 导出当前 TagMap：tag_id + 四角点世界坐标
-    bool SaveTagMapCorners(const TagMap &tag_map) const;
+    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标
+    bool SaveTagMapCorners(Map &map) const;
+
+    // 导出有 MapTag 关联的关键帧位姿（Twc TUM）
+    bool SaveTagInitKeyFrames(Map &map) const;
+
+    // 导出定标后的 ORB 初始化地图点 + 两帧关键帧位姿（与 Tag 导出同目录，便于尺度对比）
+    // orb_kf_tcw: (timestamp, Tcw)
+    bool SaveOrbInitMap(
+        const std::vector<Eigen::Vector3f> &points,
+        const std::vector<std::pair<double, Sophus::SE3f>> &orb_kf_tcw) const;
 
     // 关闭轨迹文件（SaveTagMapCorners 可重复调用）
     void CloseTrajectory();

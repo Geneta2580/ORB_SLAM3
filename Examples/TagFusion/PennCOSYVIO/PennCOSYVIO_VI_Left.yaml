@@ -44,17 +44,25 @@ ORBextractor.minThFAST: 7
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------
-Viewer.KeyFrameSize: 0.05
+# Viewer.enable: 有则覆盖 System 构造参数；原先默认开启
+Viewer.enable: 1
+# 原先默认 KeyFrameSize=0.05, CameraSize=0.08（归一化尺度）；Tag 米制下建议缩小
+Viewer.KeyFrameSize: 0.01
 Viewer.KeyFrameLineWidth: 1.0
 Viewer.GraphLineWidth: 0.9
 Viewer.PointSize: 2.0
-Viewer.CameraSize: 0.08
+Viewer.CameraSize: 0.015
 Viewer.CameraLineWidth: 3.0
 Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
 Viewer.ViewpointF: 500.0
 Viewer.imageViewScale: 1.0
+Viewer.showTagMap: 1
+Viewer.showTagKFs: 0
+
+System.saveOnlinePose: 1
+System.saveOnlinePoseFile: "OnlineCameraTrajectory.txt"
 
 #--------------------------------------------------------------------------------------------
 # Tag Parameters  (backend: Thirdparty/apriltag ethz_apriltag2)

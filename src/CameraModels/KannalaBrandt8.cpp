@@ -200,6 +200,40 @@ namespace ORB_SLAM3 {
         return tvr->Reconstruct(vKeysUn1,vKeysUn2,vMatches12,T21,vP3D,vbTriangulated);
     }
 
+    int KannalaBrandt8::TriangulateWithKnownPose(const std::vector<cv::KeyPoint>& vKeys1, const std::vector<cv::KeyPoint>& vKeys2,
+                                                 const std::vector<int> &vMatches12, const Sophus::SE3f &T21,
+                                                 std::vector<cv::Point3f> &vP3D, std::vector<bool> &vbTriangulated){
+        // Tag 米制 Tcw 来自 IPPE（理想针孔域）。三角化应对齐该域：
+        //   KB::unproject → 理想针孔像素，再用针孔 CheckRT（与 Tag 一致）。
+        // 勿用 cv::fisheye::undistortPoints（与 KB 参数化不一致）；
+        // 也勿在短基线下用过严的 KB 原图重投影门槛（易误拒导致回退中值深度）。
+        if(!tvr){
+            Eigen::Matrix3f K = this->toK_();
+            tvr = new TwoViewReconstruction(K);
+        }
+
+        const float fx = mvParameters[0];
+        const float fy = mvParameters[1];
+        const float cx = mvParameters[2];
+        const float cy = mvParameters[3];
+
+        std::vector<cv::KeyPoint> vKeysUn1 = vKeys1, vKeysUn2 = vKeys2;
+        for(size_t i = 0; i < vKeys1.size(); i++)
+        {
+            const cv::Point3f ray = this->unproject(vKeys1[i].pt);
+            const float invz = (std::abs(ray.z) > 1e-12f) ? (1.f / ray.z) : 1.f;
+            vKeysUn1[i].pt = cv::Point2f(fx * ray.x * invz + cx, fy * ray.y * invz + cy);
+        }
+        for(size_t i = 0; i < vKeys2.size(); i++)
+        {
+            const cv::Point3f ray = this->unproject(vKeys2[i].pt);
+            const float invz = (std::abs(ray.z) > 1e-12f) ? (1.f / ray.z) : 1.f;
+            vKeysUn2[i].pt = cv::Point2f(fx * ray.x * invz + cx, fy * ray.y * invz + cy);
+        }
+
+        return tvr->TriangulateWithPose(vKeysUn1, vKeysUn2, vMatches12, T21, vP3D, vbTriangulated);
+    }
+
 
     cv::Mat KannalaBrandt8::toK() {
         cv::Mat K = (cv::Mat_<float>(3, 3)

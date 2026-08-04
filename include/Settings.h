@@ -100,6 +100,7 @@ namespace ORB_SLAM3 {
         float minThFAST() {return minThFAST_;}
         float scaleFactor() {return scaleFactor_;}
 
+        bool viewerEnable() {return viewerEnable_;}
         float keyFrameSize() {return keyFrameSize_;}
         float keyFrameLineWidth() {return keyFrameLineWidth_;}
         float graphLineWidth() {return graphLineWidth_;}
@@ -209,6 +210,7 @@ namespace ORB_SLAM3 {
         /*
          * Viewer stuff
          */
+        bool viewerEnable_;
         float keyFrameSize_;
         float keyFrameLineWidth_;
         float graphLineWidth_;

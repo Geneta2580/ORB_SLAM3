@@ -45,6 +45,8 @@ public:
 
     void DrawMapPoints();
     void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba);
+    // 在 ORB 世界系叠加 MapTag：Tag 方框/坐标轴，以及关联 Tag 的关键帧相机锥
+    void DrawTagMap(const bool bDrawTags, const bool bDrawTagKFs);
     void DrawCurrentCamera(pangolin::OpenGlMatrix &Twc);
     void SetCurrentCameraPose(const Sophus::SE3f &Tcw);
     void SetReferenceKeyFrame(KeyFrame *pKF);

@@ -18,8 +18,9 @@
 
 
 #include "Map.h"
+#include "ua_tag/MapTagData.h"
 
-#include<mutex>
+#include <mutex>
 
 namespace ORB_SLAM3
 {
@@ -43,6 +44,9 @@ Map::Map(int initKFid):mnInitKFid(initKFid), mnMaxKFid(initKFid),/*mnLastLoopKFi
 
 Map::~Map()
 {
+    // 先断 KF↔MapTag，再释放 shared_ptr（避免 KF 悬空裸指针）
+    ClearMapTags();
+
     //TODO: erase all points from memory
     mspMapPoints.clear();
 
@@ -81,6 +85,229 @@ void Map::AddMapPoint(MapPoint *pMP)
 {
     unique_lock<mutex> lock(mMutexMap);
     mspMapPoints.insert(pMP);
+}
+
+bool Map::AddMapTag(const MapTagPtr &pTag)
+{
+    if(!pTag)
+        return false;
+
+    const int tag_id = pTag->Id();
+    if(tag_id < 0)
+        return false;
+
+    unique_lock<mutex> lock(mMutexMap);
+    auto it = mMapTags.find(tag_id);
+    if(it != mMapTags.end())
+        return it->second == pTag;  // 相同对象幂等成功；不同对象拒绝覆盖
+
+    if(pTag->GetMap() && pTag->GetMap() != this)
+        return false;
+
+    pTag->SetMapInternal(this);
+    mMapTags.emplace(tag_id, pTag);
+    return true;
+}
+
+bool Map::EraseMapTag(int tagId)
+{
+    MapTagPtr pTag;
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        auto it = mMapTags.find(tagId);
+        if(it == mMapTags.end())
+            return false;
+        pTag = it->second;
+        mMapTags.erase(it);
+    }
+
+    if(!pTag)
+        return true;
+
+    const auto observations = pTag->GetObservations();
+    for(const auto &kv : observations)
+    {
+        if(kv.first)
+            kv.first->EraseMapTag(tagId);
+    }
+    pTag->SetMapInternal(nullptr);
+    return true;
+}
+
+void Map::ClearMapTags()
+{
+    std::vector<MapTagPtr> tags;
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        tags.reserve(mMapTags.size());
+        for(const auto &kv : mMapTags)
+            tags.push_back(kv.second);
+        mMapTags.clear();
+        mbTagInitialized = false;
+    }
+
+    for(const MapTagPtr &pTag : tags)
+    {
+        if(!pTag)
+            continue;
+        const int tag_id = pTag->Id();
+        const auto observations = pTag->GetObservations();
+        for(const auto &kv : observations)
+        {
+            if(kv.first)
+                kv.first->EraseMapTag(tag_id);
+        }
+        pTag->SetMapInternal(nullptr);
+    }
+}
+
+Map::MapTagPtr Map::GetMapTag(int tagId) const
+{
+    unique_lock<mutex> lock(mMutexMap);
+    const auto it = mMapTags.find(tagId);
+    return (it == mMapTags.end()) ? nullptr : it->second;
+}
+
+std::vector<Map::MapTagPtr> Map::GetAllMapTags() const
+{
+    unique_lock<mutex> lock(mMutexMap);
+    std::vector<MapTagPtr> out;
+    out.reserve(mMapTags.size());
+    for(const auto &kv : mMapTags)
+        out.push_back(kv.second);
+    return out;
+}
+
+bool Map::HasMapTag(int tagId) const
+{
+    unique_lock<mutex> lock(mMutexMap);
+    return mMapTags.find(tagId) != mMapTags.end();
+}
+
+std::size_t Map::MapTagsInMap() const
+{
+    unique_lock<mutex> lock(mMutexMap);
+    return mMapTags.size();
+}
+
+bool Map::IsTagInitialized() const
+{
+    unique_lock<mutex> lock(mMutexMap);
+    return mbTagInitialized;
+}
+
+void Map::SetTagInitialized(bool initialized)
+{
+    unique_lock<mutex> lock(mMutexMap);
+    mbTagInitialized = initialized;
+}
+
+bool Map::CheckMapTagAssociations(std::string *error) const
+{
+    auto fail = [&](const std::string &msg) -> bool {
+        if(error)
+            *error = msg;
+        return false;
+    };
+
+    unique_lock<mutex> lock(mMutexMap);
+
+    // MapTag索引到KF，KF再比较索引的左右目MapTag观测下标是否与MapTag存储的观测下标一致
+    for(const auto &tag_kv : mMapTags)
+    {
+        const int tag_id = tag_kv.first;
+        const MapTagPtr &pTag = tag_kv.second;
+        if(!pTag)
+            return fail("null MapTag in container");
+        if(pTag->Id() != tag_id)
+            return fail("MapTag container key != Id()");
+        if(pTag->GetMap() != this)
+            return fail("MapTag::GetMap() mismatch");
+        if(pTag->IsBad())
+            continue;
+
+        const auto kf_obs = pTag->GetObservations();
+        for(const auto &obs_kv : kf_obs)
+        {
+            KeyFrame *pKF = obs_kv.first;
+            const auto &idx = obs_kv.second;
+            if(!pKF)
+                return fail("null KeyFrame in MapTag observations");
+            if(pKF->isBad())
+                return fail("MapTag observes bad KeyFrame");
+            if(pKF->GetMap() != this)
+                return fail("observed KF belongs to another Map");
+            if(mspKeyFrames.find(pKF) == mspKeyFrames.end())
+                return fail("observed KF not in Map keyframe set");
+
+            if(idx.leftIndex < 0 && idx.rightIndex < 0)
+                return fail("MapTag observation has no valid index");
+
+            KeyFrame::MapTagAssociation assoc;
+            if(!pKF->GetMapTagAssociation(tag_id, assoc))
+                return fail("KF missing reverse MapTag association");
+            if(assoc.pMapTag != pTag.get())
+                return fail("KF association points to different MapTag");
+            if(assoc.leftObservationIndex != idx.leftIndex ||
+               assoc.rightObservationIndex != idx.rightIndex)
+                return fail("KF/MapTag observation indices mismatch");
+
+            if(idx.leftIndex < -1 ||
+               idx.leftIndex >= static_cast<int>(pKF->mTagFrameData.left.size()))
+                return fail("left observation index out of range");
+            if(idx.rightIndex < -1 ||
+               idx.rightIndex >= static_cast<int>(pKF->mTagFrameData.right.size()))
+                return fail("right observation index out of range");
+            if(idx.leftIndex >= 0 &&
+               pKF->mTagFrameData.left[idx.leftIndex].tag_id != tag_id)
+                return fail("left TagObservation.tag_id mismatch");
+            if(idx.rightIndex >= 0 &&
+               pKF->mTagFrameData.right[idx.rightIndex].tag_id != tag_id)
+                return fail("right TagObservation.tag_id mismatch");
+        }
+    }
+
+    // KF索引到MapTag，MapTag再比较索引的左右目KF观测下标是否与KF存储的观测下标一致
+    for(KeyFrame *pKF : mspKeyFrames)
+    {
+        if(!pKF)
+            return fail("null KeyFrame in map");
+        if(pKF->isBad())
+            continue;
+
+        const auto associations = pKF->GetMapTagAssociations();
+        for(const auto &assoc_kv : associations)
+        {
+            const int tag_id = assoc_kv.first;
+            const KeyFrame::MapTagAssociation &assoc = assoc_kv.second;
+            if(!assoc.pMapTag)
+                return fail("KF association has null MapTag");
+            if(assoc.pMapTag->Id() != tag_id)
+                return fail("KF association key != MapTag::Id()");
+            if(assoc.leftObservationIndex < 0 && assoc.rightObservationIndex < 0)
+                return fail("KF association has no valid index");
+
+            const auto tag_it = mMapTags.find(tag_id);
+            if(tag_it == mMapTags.end() || tag_it->second.get() != assoc.pMapTag)
+                return fail("KF association MapTag not in Map container");
+            if(assoc.pMapTag->GetMap() != this)
+                return fail("KF association MapTag::GetMap() mismatch");
+            if(!assoc.pMapTag->IsInKeyFrame(pKF))
+                return fail("MapTag missing reverse KF observation");
+
+            const auto kf_obs = assoc.pMapTag->GetObservations();
+            const auto obs_it = kf_obs.find(pKF);
+            if(obs_it == kf_obs.end())
+                return fail("MapTag observations missing KF");
+            if(obs_it->second.leftIndex != assoc.leftObservationIndex ||
+               obs_it->second.rightIndex != assoc.rightObservationIndex)
+                return fail("reverse observation indices mismatch");
+        }
+    }
+
+    if(error)
+        error->clear();
+    return true;
 }
 
 void Map::SetImuInitialized()
@@ -215,6 +442,9 @@ void Map::clear()
 {
 //    for(set<MapPoint*>::iterator sit=mspMapPoints.begin(), send=mspMapPoints.end(); sit!=send; sit++)
 //        delete *sit;
+
+    // 先清理 MapTag 双向关联，再断开 KF
+    ClearMapTags();
 
     for(set<KeyFrame*>::iterator sit=mspKeyFrames.begin(), send=mspKeyFrames.end(); sit!=send; sit++)
     {

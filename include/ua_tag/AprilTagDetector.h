@@ -11,12 +11,14 @@ namespace ORB_SLAM3
 {
 
 class Settings;
+class GeometricCamera;
 
 namespace ua_tag
 {
 
 // 相机模型：角点去畸变 + IPPE PnP
-// 检测在原图上进行；corners_raw 为原图像素，corners_undistorted 为点去畸变结果
+// 检测在原图上进行；corners_raw 为原图像素；
+// corners_undistorted 为与 GeometricCamera::unproject 一致的理想针孔像素（供 IPPE 初值）
 struct CameraModel
 {
     double fx = 0.0;
@@ -90,13 +92,20 @@ public:
     // 设置角点去畸变所用相机（含真实畸变；鱼眼设 is_fisheye=true）
     void SetCameraModel(const CameraModel &camera);
 
+    // 注入 ORB GeometricCamera：鱼眼去畸变/重投影误差与 BA 共用 project/unproject
+    void SetGeometricCamera(GeometricCamera *camera);
+
     // 在原图（可选 CLAHE）上检测；填充 corners_raw 与 corners_undistorted（不做 IPPE）
-    bool DetectCorners(const cv::Mat &image, std::vector<tag::TagObservation> &observations);
+    // camera_id：写入观测所属相机；geometric_camera 非空时覆盖默认模型做去畸变（右目用）
+    bool DetectCorners(const cv::Mat &image,
+                       std::vector<tag::TagObservation> &observations,
+                       tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO,
+                       GeometricCamera *geometric_camera = nullptr);
 
     // 上一帧实际送入检测器的图像（原图灰度 + 可选 CLAHE），供可视化
     const cv::Mat &GetLastPreprocessedImage() const;
 
-    // IPPE_SQUARE PnP；prediction 可选，为空则不做时序消歧
+    // IPPE_SQUARE PnP（在 GeometricCamera 一致的针孔像素上）；prediction 可选
     bool EstimatePose(tag::TagObservation &observation,
                       const CameraModel &camera,
                       const PosePrediction *prediction = nullptr);
