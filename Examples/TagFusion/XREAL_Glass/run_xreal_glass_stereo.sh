@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# 启动 XREAL Glass cam0 TagFusion（单目）
+# 启动 XREAL Glass cam0+cam1 TagFusion（双目）
 #
 # 用法:
 #   ./run_xreal_glass_cam0.sh
-#   ./run_xreal_glass_cam0.sh /path/to/cam0/images [traj_name]
-#   SEQ=/path/to/20260227-room-patrol-11-1 ./run_xreal_glass_cam0.sh
+#   ./run_xreal_glass_cam0.sh /path/to/glass [traj_name]
+#   ./run_xreal_glass_cam0.sh /path/to/glass/cam0/images [traj_name]
+#   SEQ=/path/to/20260227-room-patrol-11-1/raw_data/glass ./run_xreal_glass_cam0.sh
 #
-# 运行前请确认 XREAL_Glass_cam0.yaml 中 Camera1.fx/fy/cx/cy 与 k1..k4 已填写
+# 运行前请确认 XREAL_Glass_stereo.yaml 中 Camera1/2 与 Stereo.T_c1_c2 已填写
 
 set -euo pipefail
 
@@ -14,17 +15,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORB_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 VOC="${VOC:-${ORB_ROOT}/Vocabulary/ORBvoc.txt}"
-SETTINGS="${SETTINGS:-${SCRIPT_DIR}/XREAL_Glass_cam0.yaml}"
-BIN="${BIN:-${SCRIPT_DIR}/mono_xreal_glass_tag}"
+SETTINGS="${SETTINGS:-${SCRIPT_DIR}/XREAL_Glass_stereo.yaml}"
+BIN="${BIN:-${SCRIPT_DIR}/stereo_xreal_glass_tag}"
 
-DEFAULT_SEQ="/home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass/cam0/images"
+DEFAULT_SEQ="/home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass"
 SEQ_PATH="${1:-${SEQ:-${DEFAULT_SEQ}}}"
-TRAJ_NAME="${2:-glass_cam0}"
+TRAJ_NAME="${2:-glass_stereo}"
 
 if [[ ! -x "${BIN}" ]]; then
   echo "ERROR: binary not found: ${BIN}"
   echo "Build first, e.g.:"
-  echo "  cmake --build ${ORB_ROOT}/build --target mono_xreal_glass_tag -j"
+  echo "  cmake --build ${ORB_ROOT}/build --target stereo_xreal_glass_tag -j"
   exit 1
 fi
 

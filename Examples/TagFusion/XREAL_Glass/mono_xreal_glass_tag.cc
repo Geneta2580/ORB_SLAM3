@@ -13,10 +13,8 @@
 *   ./mono_xreal_glass_tag vocabulary settings sequence_or_image_path [trajectory_file_name]
 */
 
-#include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -152,49 +150,6 @@ void LoadImages(const string &seqPath,
     cout << "Images:     " << imagePath << "/mXXXXXXX.pgm" << endl;
 }
 
-void ConvertEuRoCTimestampsToSeconds(const string &filename)
-{
-    ifstream fin(filename.c_str());
-    if(!fin.is_open())
-    {
-        cerr << "WARNING: Cannot reopen " << filename
-             << " to convert EuRoC timestamps to seconds" << endl;
-        return;
-    }
-
-    vector<string> lines;
-    string line;
-    while(getline(fin, line))
-    {
-        if(line.empty())
-            continue;
-
-        stringstream ss(line);
-        double t_ns = 0.0;
-        if(!(ss >> t_ns))
-            continue;
-
-        string rest;
-        getline(ss, rest);
-        stringstream out;
-        out.setf(ios::fixed);
-        out << setprecision(6) << (t_ns * 1e-9) << rest;
-        lines.push_back(out.str());
-    }
-    fin.close();
-
-    ofstream fout(filename.c_str());
-    if(!fout.is_open())
-    {
-        cerr << "WARNING: Cannot rewrite " << filename << endl;
-        return;
-    }
-    for(size_t i = 0; i < lines.size(); ++i)
-        fout << lines[i] << '\n';
-    fout.close();
-    cout << "Converted EuRoC timestamps to seconds in " << filename << endl;
-}
-
 }  // namespace
 
 int main(int argc, char **argv)
@@ -310,19 +265,19 @@ int main(int argc, char **argv)
 
     SLAM.Shutdown();
 
+    // 与 cam0_pose.txt / timestamps.txt 一致：TUM 格式，时间戳单位为秒。
+    // 勿用 SaveTrajectoryEuRoC（会写成 t*1e9 纳秒），否则无法与真值对齐。
     if(bFileName)
     {
         const string kf_file = "kf_" + string(argv[4]) + ".txt";
         const string f_file = "f_" + string(argv[4]) + ".txt";
-        SLAM.SaveTrajectoryEuRoC(f_file);
+        SLAM.SaveTrajectoryTUM(f_file);
         SLAM.SaveKeyFrameTrajectoryTUM(kf_file);
-        ConvertEuRoCTimestampsToSeconds(f_file);
     }
     else
     {
-        SLAM.SaveTrajectoryEuRoC("CameraTrajectory.txt");
+        SLAM.SaveTrajectoryTUM("CameraTrajectory.txt");
         SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
-        ConvertEuRoCTimestampsToSeconds("CameraTrajectory.txt");
     }
 
     return 0;
