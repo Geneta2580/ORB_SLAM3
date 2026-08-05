@@ -33,6 +33,10 @@
 namespace ORB_SLAM3
 {
 
+namespace tag {
+class MapTagData;
+}  // namespace tag
+
 class System;
 class Tracking;
 class LoopClosing;
@@ -134,6 +138,14 @@ protected:
     bool CheckNewKeyFrames();
     void ProcessNewKeyFrame();
     void CreateNewMapPoints();
+
+    // KF 入 Map 后：创建/查找 MapTag，并与当前 KF 建立双向关联
+    void ProcessTagObservations(KeyFrame *pKF);
+    // 用 KF 上消歧后的 IPPE 估计 MapTag 世界位姿初值（优先左目）
+    bool InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
+                              int leftIndex, int rightIndex) const;
+    // 多帧联合消歧：基线筛选有效 KF，遍历 IPPE 假设交叉重投影，成功则写 pose 并转 ACTIVE
+    bool TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) const;
 
     void MapPointCulling();
     void SearchInNeighbors();

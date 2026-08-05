@@ -14,6 +14,46 @@
 namespace ORB_SLAM3 {
 namespace tag {
 
+namespace {
+
+void LogFrameTagAmbiguityRatios(const Frame &frame, const char *label)
+{
+    auto log_obs = [&](const TagObservation &obs, const char *cam) {
+        if(obs.is_outlier || obs.tag_id < 0)
+            return;
+
+        int selected = -1;
+        float ambiguity_ratio = -1.0f;
+        int cand0_valid = 0;
+        int cand1_valid = 0;
+        if(obs.pose_estimate.has_value())
+        {
+            const TagPoseEstimate &est = *obs.pose_estimate;
+            selected = est.selected_candidate;
+            ambiguity_ratio = est.ambiguity_ratio;
+            cand0_valid = est.candidates[0].valid ? 1 : 0;
+            cand1_valid = est.candidates[1].valid ? 1 : 0;
+        }
+
+        std::cout << "[TagInitializer] " << label
+                  << " frame_id=" << frame.mnId
+                  << " tag_id=" << obs.tag_id
+                  << " cam=" << cam
+                  << " selected=" << selected
+                  << " ambiguity_ratio=" << ambiguity_ratio
+                  << " cand0_valid=" << cand0_valid
+                  << " cand1_valid=" << cand1_valid
+                  << std::endl;
+    };
+
+    for(const TagObservation &obs : frame.mTagFrameData.left)
+        log_obs(obs, "left");
+    for(const TagObservation &obs : frame.mTagFrameData.right)
+        log_obs(obs, "right");
+}
+
+}  // namespace
+
 TagInitializer::TagInitializer(const std::string &settingsFile)
 {
     cv::FileStorage fs(settingsFile, cv::FileStorage::READ);
@@ -372,14 +412,27 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
         std::cout << "[TagInitializer] TryInitializeSingleFrame running"
                   << " (frame_id=" << frame.mnId << ")" << std::endl;
 
+    LogFrameTagAmbiguityRatios(frame, "init_single");
+
     // 收集无歧义的有效观测
     const UnambiguousObsMap unambiguous = CollectUnambiguousObservations(frame);
 
     if(mbVerbose)
+    {
         std::cout << "[TagInitializer] unambiguous valid observations: "
                   << unambiguous.size()
                   << " (need >= " << kMinUnambiguousTagsForSingleFrame << ")"
-                  << std::endl;
+                  << " ids=[";
+        bool first = true;
+        for(const auto &kv : unambiguous)
+        {
+            if(!first)
+                std::cout << ", ";
+            std::cout << kv.first;
+            first = false;
+        }
+        std::cout << "]" << std::endl;
+    }
 
     // 无歧义观测数不足
     if(unambiguous.size() < kMinUnambiguousTagsForSingleFrame)
@@ -487,6 +540,9 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
                   << " (frame_id=" << frame.mnId
                   << ", ref_frame_id=" << ref_frame.mnId
                   << ", common_tags=" << common_obs.size() << ")" << std::endl;
+
+    LogFrameTagAmbiguityRatios(ref_frame, "init_two_ref");
+    LogFrameTagAmbiguityRatios(frame, "init_two_cur");
 
     // 共同观测去畸变角点的平均像素位移
     const float mean_pixel_disp = ComputeMeanCornerPixelDisplacement(common_obs);

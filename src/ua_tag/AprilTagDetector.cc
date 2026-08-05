@@ -668,6 +668,155 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
     return true;
 }
 
+namespace {
+
+// 将 source 的两候选经 T_target_source 变换到目标相机系，对 target_corners 算 RMSE。
+// T_target_source：P_target = T_target_source * P_source
+bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
+                             const std::array<cv::Point2f, 4> &target_corners,
+                             const Sophus::SE3f &T_target_source,
+                             GeometricCamera *cam_target,
+                             double tag_size,
+                             double tau_rho,
+                             const char *direction_label)
+{
+    if(!cam_target || tag_size <= 0.0)
+        return false;
+    if(source_obs.is_outlier || source_obs.tag_id < 0)
+        return false;
+    if(!source_obs.pose_estimate.has_value())
+        return false;
+
+    tag::TagPoseEstimate &est = *source_obs.pose_estimate;
+    if(est.selected_candidate >= 0)
+        return false;
+    if(!est.candidates[0].valid || !est.candidates[1].valid)
+        return false;
+
+    std::vector<cv::Point3f> object_pts;
+    BuildSquareObjectPoints(tag_size, object_pts);
+
+    double e[2] = {std::numeric_limits<double>::infinity(),
+                   std::numeric_limits<double>::infinity()};
+
+    for(int i = 0; i < 2; ++i)
+    {
+        const Sophus::SE3f &T_cs_t = est.candidates[i].T_ct;
+        double sum_sq = 0.0;
+        bool ok = true;
+        for(int k = 0; k < 4; ++k)
+        {
+            const Eigen::Vector3f P_t(object_pts[k].x, object_pts[k].y,
+                                     object_pts[k].z);
+            // 源相机系：P_cs = T_cs_t * P_t
+            const Eigen::Vector3f P_cs = T_cs_t * P_t;
+            if(P_cs.z() <= 0.0f)
+            {
+                ok = false;
+                break;
+            }
+            // 目标相机系：P_ct = T_target_source * P_cs
+            const Eigen::Vector3f P_ct = T_target_source * P_cs;
+            if(P_ct.z() <= 0.0f)
+            {
+                ok = false;
+                break;
+            }
+            const cv::Point2f uv =
+                cam_target->project(cv::Point3f(P_ct.x(), P_ct.y(), P_ct.z()));
+            const double dx =
+                static_cast<double>(uv.x - target_corners[k].x);
+            const double dy =
+                static_cast<double>(uv.y - target_corners[k].y);
+            sum_sq += dx * dx + dy * dy;
+        }
+        if(ok)
+            e[i] = std::sqrt(sum_sq / 4.0);
+    }
+
+    if(!std::isfinite(e[0]) && !std::isfinite(e[1]))
+        return false;
+
+    int i_better = 0;
+    int i_worse = 1;
+    if(e[1] < e[0])
+    {
+        i_better = 1;
+        i_worse = 0;
+    }
+
+    if(!std::isfinite(e[i_better]))
+        return false;
+
+    constexpr double kErrorEps = 1e-9;
+    const double e_better = e[i_better];
+    const double e_worse =
+        std::isfinite(e[i_worse]) ? e[i_worse]
+                                  : std::numeric_limits<double>::infinity();
+    const double rho = (e_worse + kErrorEps) / (e_better + kErrorEps);
+
+    if(!(rho > tau_rho) || !std::isfinite(rho))
+    {
+        std::cout << "[TagStereo] fail tag_id=" << source_obs.tag_id
+                  << " dir=" << direction_label
+                  << " reason=stereo_ratio_weak"
+                  << " e0=" << e[0] << " e1=" << e[1]
+                  << " rho=" << rho << " tau=" << tau_rho
+                  << " mono_ratio=" << est.ambiguity_ratio
+                  << std::endl;
+        return false;
+    }
+
+    est.selected_candidate = i_better;
+    est.ambiguity_ratio = static_cast<float>(rho);
+
+    std::cout << "[TagStereo] ok tag_id=" << source_obs.tag_id
+              << " dir=" << direction_label
+              << " selected=" << i_better
+              << " e_better=" << e_better
+              << " e_worse=" << e_worse
+              << " stereo_ratio=" << rho
+              << std::endl;
+    return true;
+}
+
+}  // namespace
+
+bool DisambiguateWithStereo(tag::TagObservation &left_obs,
+                            tag::TagObservation &right_obs,
+                            const Sophus::SE3f &T_lr,
+                            GeometricCamera *cam_left,
+                            GeometricCamera *cam_right,
+                            double tag_size,
+                            double tau_rho)
+{
+    if(!cam_left || !cam_right || tag_size <= 0.0)
+        return false;
+    if(left_obs.is_outlier || right_obs.is_outlier)
+        return false;
+    if(left_obs.tag_id < 0 || left_obs.tag_id != right_obs.tag_id)
+        return false;
+
+    // 1) L→R：消歧左目（P_right = T_rl * P_left）
+    if(!left_obs.IsAmbiguityResolved() && left_obs.pose_estimate.has_value())
+    {
+        if(CrossReprojDisambiguate(left_obs, right_obs.corners_raw,
+                                   T_lr.inverse(), cam_right, tag_size, tau_rho,
+                                   "L2R"))
+            return true;
+    }
+
+    // 2) 左目失败 → R→L：消歧右目（P_left = T_lr * P_right）
+    if(!right_obs.IsAmbiguityResolved() && right_obs.pose_estimate.has_value())
+    {
+        if(CrossReprojDisambiguate(right_obs, left_obs.corners_raw, T_lr,
+                                   cam_left, tag_size, tau_rho, "R2L"))
+            return true;
+    }
+
+    return false;
+}
+
 }  // namespace ua_tag
 }  // namespace ORB_SLAM3
 

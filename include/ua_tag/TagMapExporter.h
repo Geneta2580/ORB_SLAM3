@@ -34,8 +34,9 @@ public:
                           double timestamp,
                           const Sophus::SE3f &Tcw);
 
-    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标
-    bool SaveTagMapCorners(Map &map) const;
+    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标（可重复调用覆盖）
+    // verbose=false 用于在线更新，避免刷屏
+    bool SaveTagMapCorners(Map &map, bool verbose = true) const;
 
     // 导出有 MapTag 关联的关键帧位姿（Twc TUM）
     bool SaveTagInitKeyFrames(Map &map) const;

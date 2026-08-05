@@ -51,8 +51,15 @@ void TagTracker::SaveExports(Map &map)
 {
     if(!mpExporter || !mpExporter->IsEnabled())
         return;
-    mpExporter->SaveTagMapCorners(map);
+    mpExporter->SaveTagMapCorners(map, true);
     mpExporter->CloseTrajectory();
+}
+
+void TagTracker::SaveTagMapOnline(Map &map)
+{
+    if(!mpExporter || !mpExporter->IsEnabled())
+        return;
+    mpExporter->SaveTagMapCorners(map, false);
 }
 
 bool TagTracker::SaveInitMaps(

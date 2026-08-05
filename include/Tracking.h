@@ -125,6 +125,9 @@ public:
     // 导出 MapTag 四角点与相机 Pose 轨迹（Shutdown 前调用）
     void SaveTagExports();
 
+    // 在线覆盖写入当前 TagMap（LocalMapping 更新 MapTag 后调用）
+    void SaveTagMapOnline();
+
     float GetImageScale();
 
 #ifdef REGISTER_LOOP

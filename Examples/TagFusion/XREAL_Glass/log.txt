@@ -1,0 +1,921 @@
+VOC      = /home/geneta/project/XREAL/ORB_SLAM3/Vocabulary/ORBvoc.txt
+SETTINGS = /home/geneta/project/XREAL/ORB_SLAM3/Examples/TagFusion/XREAL_Glass/XREAL_Glass_stereo.yaml
+SEQ      = /home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass
+TRAJ     = glass_stereo
+BIN      = /home/geneta/project/XREAL/ORB_SLAM3/Examples/TagFusion/XREAL_Glass/stereo_xreal_glass_tag
+-------
+file name: glass_stereo
+Loading XREAL Glass stereo sequence from /home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass ...
+Timestamps: /home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass/cam0/images/timestamps.txt (11832)
+Left:       /home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass/cam0/images
+Right:      /home/geneta/dataset/20260227-room-patrol-11-1/raw_data/glass/cam1/images
+LOADED 11832 stereo pairs!
+
+-------
+
+ORB-SLAM3 Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ORB-SLAM2 Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+This program comes with ABSOLUTELY NO WARRANTY;
+This is free software, and you are welcome to redistribute it
+under certain conditions. See LICENSE.txt.
+
+Input sensor was set to: Stereo
+Loading settings from /home/geneta/project/XREAL/ORB_SLAM3/Examples/TagFusion/XREAL_Glass/XREAL_Glass_stereo.yaml
+	-Loaded camera 1
+	-Loaded camera 2
+	-Loaded image info
+	-Loaded ORB settings
+	-Loaded viewer settings
+	-Loaded Atlas settings
+	-Loaded misc parameters
+----------------------------------
+SLAM settings: 
+	-Camera 1 parameters (Kannala-Brandt): [ 240.74198913574219 240.71443176269531 242.19416809082031 319.68621826171875 -0.0012559699825942516 0.081141412258148193 -0.085596159100532532 0.026608040556311607 ]
+	-Camera 2 parameters (Kannala-Brandt: [ 240.983642578125 241.20570373535156 234.60252380371094 315.50653076171875 -0.0018835397204384208 0.092901930212974548 -0.12533435225486755 0.07503848522901535 ]
+	-Original image size: [ 480 , 640 ]
+	-Current image size: [ 480 , 640 ]
+	-Sequence FPS: 30
+	-Stereo baseline: 0.13734140992164612
+	-Stereo depth threshold : 40
+	-Camera 1 overlapping area: [ 0 , 479 ]
+	-Camera 2 overlapping area: [ 0 , 479 ]
+	-Features per image: 1200
+	-ORB scale factor: 1.2000000476837158
+	-ORB number of scales: 8
+	-Initial FAST threshold: 20
+	-Min FAST threshold: 7
+
+
+Loading ORB Vocabulary. This could take a while...
+Vocabulary loaded!
+
+Initialization of Atlas from scratch 
+Creation of new map with id: 0
+Creation of new map with last KF id: 0
+Seq. Name: 
+[TagMapExporter] export dir=tag_export
+Online TUM pose log enabled -> OnlineCameraTrajectory.txt
+There are 2 cameras in the atlas
+Camera 0 is fisheye
+Camera 2 is fisheye
+ORB Viewer enabled
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.78774516855081889 e1=1.0578404085724071 rho=1.342871337663168 tau=3 mono_ratio=2.3107776641845703
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.77503275401142979 e1=1.1237093123165125 rho=1.4498862222925541 tau=3 mono_ratio=2.8673951625823975
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=1.0547672589540047 e1=1.3629418600025476 rho=1.2921730819194952 tau=3 mono_ratio=2.468191385269165
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.2267066780329894 e1=1.586378895569267 rho=1.2932014830308143 tau=3 mono_ratio=2.1492905616760254
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.2913471916914394 e1=1.512596172662765 rho=1.1713319099801474 tau=3 mono_ratio=1.7712534666061401
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.99669969315964324 e1=1.1083317716123462 rho=1.112001718377996 tau=3 mono_ratio=2.7323844432830811
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0553043063017651 e1=1.0736277468728643 rho=1.0173631818275708 tau=3 mono_ratio=2.9468543529510498
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.2351099489962469 e1=1.6544994909568926 rho=1.3395564435068474 tau=3 mono_ratio=2.9465725421905518
+[TagStereo] fail tag_id=82 dir=R2L reason=stereo_ratio_weak e0=1.041857071042297 e1=1.2385379927663485 rho=1.1887791780675907 tau=3 mono_ratio=2.4083726406097412
+[TagInitializer] TryInitialize Stereo (frame_id=0)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=0)
+[TagInitializer] init_single frame_id=0 tag_id=110 cam=left selected=-1 ambiguity_ratio=2.3107776641845703 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=111 cam=left selected=-1 ambiguity_ratio=2.8673951625823975 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=112 cam=left selected=0 ambiguity_ratio=13.708953857421875 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=113 cam=left selected=-1 ambiguity_ratio=2.1492905616760254 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=99 cam=left selected=0 ambiguity_ratio=3.6300449371337891 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=101 cam=left selected=0 ambiguity_ratio=3.9716670513153076 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=100 cam=left selected=0 ambiguity_ratio=6.4426426887512207 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=102 cam=left selected=0 ambiguity_ratio=12.084827423095703 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=88 cam=left selected=0 ambiguity_ratio=3.615410327911377 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=91 cam=left selected=0 ambiguity_ratio=4.6710009574890137 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=77 cam=left selected=0 ambiguity_ratio=6.5672821998596191 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=79 cam=left selected=-1 ambiguity_ratio=2.7323844432830811 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=82 cam=left selected=-1 ambiguity_ratio=2.9465725421905518 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=110 cam=right selected=0 ambiguity_ratio=4.5714492797851562 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=112 cam=right selected=-1 ambiguity_ratio=1.3159462213516235 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=113 cam=right selected=-1 ambiguity_ratio=1.7712534666061401 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=111 cam=right selected=-1 ambiguity_ratio=2.468191385269165 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=100 cam=right selected=-1 ambiguity_ratio=2.4069085121154785 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=101 cam=right selected=0 ambiguity_ratio=3.4907295703887939 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=99 cam=right selected=0 ambiguity_ratio=4.3511056900024414 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=102 cam=right selected=0 ambiguity_ratio=6.1766014099121094 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=88 cam=right selected=0 ambiguity_ratio=5.3823328018188477 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=89 cam=right selected=0 ambiguity_ratio=4.9540309906005859 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=90 cam=right selected=-1 ambiguity_ratio=2.3352088928222656 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=91 cam=right selected=-1 ambiguity_ratio=1.7431488037109375 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=92 cam=right selected=0 ambiguity_ratio=6.9918627738952637 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=93 cam=right selected=0 ambiguity_ratio=4.9643902778625488 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=78 cam=right selected=0 ambiguity_ratio=5.0784358978271484 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=77 cam=right selected=0 ambiguity_ratio=8.1064462661743164 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=79 cam=right selected=-1 ambiguity_ratio=2.9468543529510498 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=80 cam=right selected=-1 ambiguity_ratio=2.5513653755187988 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=0 tag_id=82 cam=right selected=-1 ambiguity_ratio=2.4083726406097412 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 13 (need >= 3) ids=[93, 92, 110, 77, 78, 91, 89, 102, 100, 88, 101, 99, 112]
+[TagInitializer] TryInitializeSingleFrame succeeded (tags=13)
+First KF:0; Map init KF:0
+[TagInitializer] CommitTagInitialization succeeded tags=13 kfs=1
+[TagInit] stereo CommitTagInitialization succeeded (frame_id=0, tags=13)
+New Map created with 82 points
+[TagMapExporter] saved tag map corners -> tag_export/tag_map_corners.csv num_tags=13 with_corners=13
+[TagMapExporter] saved tag init keyframes -> tag_export/tag_init_keyframes_tum.txt num_kf=1
+[TagMapExporter] saved ORB init map points -> tag_export/orb_init_map_points.csv num_pts=82
+[TagMapExporter] saved ORB init keyframes -> tag_export/orb_init_keyframes_tum.txt num_kf=1
+[TagLM] InitializeMapTagPose fail tag_id=80 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.5513653755187988 cand0_valid=1 cand1_valid=1 left_idx=-1 right_idx=17
+[TagLM] created MapTag id=80 as CANDIDATE from kf_id=0 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=90 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.3352088928222656 cand0_valid=1 cand1_valid=1 left_idx=-1 right_idx=10
+[TagLM] created MapTag id=90 as CANDIDATE from kf_id=0 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=0 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.1492905616760254 cand0_valid=1 cand1_valid=1 left_idx=3 right_idx=2
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.7712534666061401 cand0_valid=1 cand1_valid=1 left_idx=3 right_idx=2
+[TagLM] created MapTag id=113 as CANDIDATE from kf_id=0 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=0 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.7323844432830811 cand0_valid=1 cand1_valid=1 left_idx=11 right_idx=16
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.9468543529510498 cand0_valid=1 cand1_valid=1 left_idx=11 right_idx=16
+[TagLM] created MapTag id=79 as CANDIDATE from kf_id=0 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=111 kf_id=0 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.8673951625823975 cand0_valid=1 cand1_valid=1 left_idx=1 right_idx=3
+[TagLM] InitializeMapTagPose fail tag_id=111 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.468191385269165 cand0_valid=1 cand1_valid=1 left_idx=1 right_idx=3
+[TagLM] created MapTag id=111 as CANDIDATE from kf_id=0 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=82 kf_id=0 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.9465725421905518 cand0_valid=1 cand1_valid=1 left_idx=12 right_idx=18
+[TagLM] InitializeMapTagPose fail tag_id=82 kf_id=0 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.4083726406097412 cand0_valid=1 cand1_valid=1 left_idx=12 right_idx=18
+[TagLM] created MapTag id=82 as CANDIDATE from kf_id=0 has_pose=0
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.85940159389409798 e1=1.0138353622664542 rho=1.1796991875391933 tau=3 mono_ratio=1.3482211828231812
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.67906446721930735 e1=0.80036564136830801 rho=1.1786298353484546 tau=3 mono_ratio=2.3376572132110596
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.65075437339226627 e1=0.68726180922675173 rho=1.0561001773804124 tau=3 mono_ratio=2.3476600646972656
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=1.247377994117846 e1=1.0726303446739704 rho=1.1629150714863241 tau=3 mono_ratio=1.4829649925231934
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.79344411494672729 e1=0.81435780737873087 rho=1.0263581164844227 tau=3 mono_ratio=2.1088216304779053
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.56310348823899736 e1=0.80244811982303299 rho=1.4250455487453939 tau=3 mono_ratio=2.5875751972198486
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.855891894699495 e1=1.055468635490471 rho=1.2331798464195856 tau=3 mono_ratio=2.2502310276031494
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.94874090125404287 e1=0.93157652883970887 rho=1.0184250803498531 tau=3 mono_ratio=1.2153257131576538
+[TagStereo] fail tag_id=93 dir=L2R reason=stereo_ratio_weak e0=0.99421608829093289 e1=1.447130450475369 rho=1.4555492181860095 tau=3 mono_ratio=2.9629185199737549
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.74685770851576683 e1=0.79122574132637402 rho=1.0594062727683078 tau=3 mono_ratio=1.6820118427276611
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0219631192914684 e1=1.0818634735334234 rho=1.058613029230322 tau=3 mono_ratio=1.2317109107971191
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.90637826862848858 e1=0.99225883926717096 rho=1.0947513565984803 tau=3 mono_ratio=1.2659070491790771
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0623626768432353 e1=1.0976123500891353 rho=1.0331804514419336 tau=3 mono_ratio=1.5537470579147339
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.75987485461129034 e1=0.7611545095646981 rho=1.0016840338168294 tau=3 mono_ratio=1.26247239112854
+Fail to track local map!
+Starting the Viewer
+LM: Active map reset recieved
+LM: Active map reset, waiting...
+LM: Reseting current map in Local Mapping...
+LM: End reseting Local Mapping...
+LM: Reset free the mutex
+LM: Active map reset, Done!!!
+mnFirstFrameId = 0
+mnInitialFrameId = 0
+1 Frames set to lost
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.97271378183149881 e1=1.3311977378918247 rho=1.3685400190555597 tau=3 mono_ratio=2.1104631423950195
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.6367971263810589 e1=0.83097330594519669 rho=1.3049262806236608 tau=3 mono_ratio=1.7027531862258911
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.0089856591308339 e1=1.2603007418366357 rho=1.2490769617808186 tau=3 mono_ratio=1.2470302581787109
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=1.1778293554219337 e1=1.0959968004665852 rho=1.074664957822729 tau=3 mono_ratio=1.4521646499633789
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.92083472197582439 e1=0.85449548686616705 rho=1.0776355592881113 tau=3 mono_ratio=1.3645298480987549
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.78092419659322698 e1=0.89836419972044457 rho=1.1503859190036143 tau=3 mono_ratio=2.6385493278503418
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.74573853808240842 e1=0.87860247938832803 rho=1.1781642416783256 tau=3 mono_ratio=2.020951509475708
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0900983939674029 e1=1.133983948677852 rho=1.0402583426533358 tau=3 mono_ratio=2.8835434913635254
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.80804285414790833 e1=0.73837049164226076 rho=1.0943596246056975 tau=3 mono_ratio=1.4505569934844971
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=0.98653400926230106 e1=1.0068733338638536 rho=1.0206169522692328 tau=3 mono_ratio=1.1726630926132202
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.8680365112921844 e1=0.90509617390266039 rho=1.042693667934099 tau=3 mono_ratio=1.34351646900177
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0372938403024987 e1=0.97651808637712922 rho=1.0622372024757982 tau=3 mono_ratio=1.4319403171539307
+[TagInitializer] TryInitialize Stereo (frame_id=2)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=2)
+[TagInitializer] init_single frame_id=2 tag_id=110 cam=left selected=-1 ambiguity_ratio=2.1328966617584229 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=112 cam=left selected=-1 ambiguity_ratio=2.1104631423950195 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=113 cam=left selected=-1 ambiguity_ratio=2.8544878959655762 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=114 cam=left selected=-1 ambiguity_ratio=2.2101869583129883 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.7027531862258911 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=100 cam=left selected=0 ambiguity_ratio=5.3743834495544434 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=101 cam=left selected=0 ambiguity_ratio=4.7312288284301758 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=102 cam=left selected=-1 ambiguity_ratio=1.2470302581787109 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=103 cam=left selected=0 ambiguity_ratio=9.3024568557739258 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=89 cam=left selected=-1 ambiguity_ratio=1.3645298480987549 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=90 cam=left selected=-1 ambiguity_ratio=2.020951509475708 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=88 cam=left selected=0 ambiguity_ratio=7.2014050483703613 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=93 cam=left selected=0 ambiguity_ratio=5.0958199501037598 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=92 cam=left selected=0 ambiguity_ratio=3.5436604022979736 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=91 cam=left selected=0 ambiguity_ratio=3.1405003070831299 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=77 cam=left selected=0 ambiguity_ratio=4.8459186553955078 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=79 cam=left selected=-1 ambiguity_ratio=1.4505569934844971 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=78 cam=left selected=-1 ambiguity_ratio=1.34351646900177 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=81 cam=left selected=-1 ambiguity_ratio=2.3352859020233154 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=82 cam=left selected=0 ambiguity_ratio=4.1408886909484863 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=112 cam=right selected=0 ambiguity_ratio=13.921111106872559 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=111 cam=right selected=0 ambiguity_ratio=9.5027780532836914 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=99 cam=right selected=0 ambiguity_ratio=4.2382268905639648 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=101 cam=right selected=0 ambiguity_ratio=12.200278282165527 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=102 cam=right selected=-1 ambiguity_ratio=1.4521646499633789 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=104 cam=right selected=0 ambiguity_ratio=3.1403355598449707 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=88 cam=right selected=-1 ambiguity_ratio=2.4666068553924561 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=89 cam=right selected=-1 ambiguity_ratio=2.6385493278503418 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=92 cam=right selected=0 ambiguity_ratio=4.1835904121398926 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=90 cam=right selected=-1 ambiguity_ratio=2.8835434913635254 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=91 cam=right selected=0 ambiguity_ratio=4.1153750419616699 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=77 cam=right selected=-1 ambiguity_ratio=1.4621063470840454 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=78 cam=right selected=-1 ambiguity_ratio=1.4319403171539307 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=80 cam=right selected=0 ambiguity_ratio=3.8919987678527832 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=79 cam=right selected=-1 ambiguity_ratio=1.1726630926132202 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=2 tag_id=82 cam=right selected=-1 ambiguity_ratio=2.9188024997711182 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 14 (need >= 3) ids=[80, 100, 101, 88, 103, 77, 93, 92, 91, 104, 112, 99, 82, 111]
+[TagInitializer] TryInitializeSingleFrame succeeded (tags=14)
+First KF:1; Map init KF:0
+[TagInitializer] CommitTagInitialization succeeded tags=14 kfs=1
+[TagInit] stereo CommitTagInitialization succeeded (frame_id=2, tags=14)
+New Map created with 81 points
+[TagMapExporter] saved tag map corners -> tag_export/tag_map_corners.csv num_tags=14 with_corners=14
+[TagMapExporter] saved tag init keyframes -> tag_export/tag_init_keyframes_tum.txt num_kf=1
+[TagMapExporter] saved ORB init map points -> tag_export/orb_init_map_points.csv num_pts=81
+[TagMapExporter] saved ORB init keyframes -> tag_export/orb_init_keyframes_tum.txt num_kf=1
+[TagLM] InitializeMapTagPose fail tag_id=78 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.34351646900177 cand0_valid=1 cand1_valid=1 left_idx=17 right_idx=12
+[TagLM] InitializeMapTagPose fail tag_id=78 kf_id=1 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.4319403171539307 cand0_valid=1 cand1_valid=1 left_idx=17 right_idx=12
+[TagLM] created MapTag id=78 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.4505569934844971 cand0_valid=1 cand1_valid=1 left_idx=16 right_idx=14
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=1 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.1726630926132202 cand0_valid=1 cand1_valid=1 left_idx=16 right_idx=14
+[TagLM] created MapTag id=79 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=81 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.3352859020233154 cand0_valid=1 cand1_valid=1 left_idx=18 right_idx=-1
+[TagLM] created MapTag id=81 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=110 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.1328966617584229 cand0_valid=1 cand1_valid=1 left_idx=0 right_idx=-1
+[TagLM] created MapTag id=110 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.8544878959655762 cand0_valid=1 cand1_valid=1 left_idx=2 right_idx=-1
+[TagLM] created MapTag id=113 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=114 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.2101869583129883 cand0_valid=1 cand1_valid=1 left_idx=3 right_idx=-1
+[TagLM] created MapTag id=114 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=102 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.2470302581787109 cand0_valid=1 cand1_valid=1 left_idx=7 right_idx=4
+[TagLM] InitializeMapTagPose fail tag_id=102 kf_id=1 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.4521646499633789 cand0_valid=1 cand1_valid=1 left_idx=7 right_idx=4
+[TagLM] created MapTag id=102 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=89 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.3645298480987549 cand0_valid=1 cand1_valid=1 left_idx=9 right_idx=7
+[TagLM] InitializeMapTagPose fail tag_id=89 kf_id=1 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.6385493278503418 cand0_valid=1 cand1_valid=1 left_idx=9 right_idx=7
+[TagLM] created MapTag id=89 as CANDIDATE from kf_id=1 has_pose=0
+[TagLM] InitializeMapTagPose fail tag_id=90 kf_id=1 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.020951509475708 cand0_valid=1 cand1_valid=1 left_idx=10 right_idx=9
+[TagLM] InitializeMapTagPose fail tag_id=90 kf_id=1 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.8835434913635254 cand0_valid=1 cand1_valid=1 left_idx=10 right_idx=9
+[TagLM] created MapTag id=90 as CANDIDATE from kf_id=1 has_pose=0
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.60370256771572417 e1=0.77628711378972226 rho=1.285876779423256 tau=3 mono_ratio=2.1004760265350342
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.0764304362564237 e1=1.22149810794256 rho=1.1347673446097277 tau=3 mono_ratio=1.9548169374465942
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.73826630473305177 e1=0.87343508594723984 rho=1.1830894626566684 tau=3 mono_ratio=2.8152289390563965
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.76558421645027486 e1=0.81792440923881216 rho=1.0683663424552463 tau=3 mono_ratio=1.3455759286880493
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.98742018664566045 e1=1.0792168252542764 rho=1.0929661351440363 tau=3 mono_ratio=2.6039330959320068
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.95142393693766136 e1=1.0389110314848062 rho=1.0919538504956949 tau=3 mono_ratio=1.9091747999191284
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.7443732942718202 e1=0.74137575813646472 rho=1.0040432076425683 tau=3 mono_ratio=2.9229960441589355
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.95834144049917136 e1=0.95129401925805157 rho=1.0074082471780996 tau=3 mono_ratio=2.7195744514465332
+[TagKF] new Tag observed, force keyframe frame_id=3 new_tag_ids=[115]
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=2 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.5277398824691772 cand0_valid=1 cand1_valid=1 left_idx=-1 right_idx=15
+[TagLM] InitializeMapTagPose ok tag_id=110 kf_id=2 cam=right selected=0 reproj_err=0.058587189763784409 t_w=[-0.049447063356637955, -0.42181214690208435, 0.71481800079345703]
+[TagLM] InitializeMapTagPose ok tag_id=81 kf_id=2 cam=left selected=0 reproj_err=0.041300665587186813 t_w=[0.2462497353553772, -0.1737813800573349, 0.78823459148406982]
+[TagLM] InitializeMapTagPose fail tag_id=78 kf_id=2 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.7195744514465332 cand0_valid=1 cand1_valid=1 left_idx=14 right_idx=14
+[TagLM] InitializeMapTagPose ok tag_id=78 kf_id=2 cam=right selected=0 reproj_err=0.030953185632824898 t_w=[0.013515670783817768, -0.18767924606800079, 0.77693092823028564]
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=2 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.3810663223266602 cand0_valid=1 cand1_valid=1 left_idx=1 right_idx=-1
+[TagLM] InitializeMapTagPose fail tag_id=115 kf_id=2 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.3893030881881714 cand0_valid=1 cand1_valid=1 left_idx=2 right_idx=-1
+[TagLM] created MapTag id=115 as CANDIDATE from kf_id=2 has_pose=0
+[TagLM] InitializeMapTagPose ok tag_id=102 kf_id=2 cam=left selected=0 reproj_err=0.042800750583410263 t_w=[0.17914481461048126, -0.33333808183670044, 0.74862557649612427]
+[TagLM] InitializeMapTagPose fail tag_id=89 kf_id=2 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.6039330959320068 cand0_valid=1 cand1_valid=1 left_idx=10 right_idx=8
+[TagLM] InitializeMapTagPose fail tag_id=89 kf_id=2 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.9091747999191284 cand0_valid=1 cand1_valid=1 left_idx=10 right_idx=8
+[TagLM] InitializeMapTagPose ok tag_id=90 kf_id=2 cam=left selected=0 reproj_err=0.015094700269401073 t_w=[0.094134137034416199, -0.26136541366577148, 0.76531755924224854]
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.1019853471136278 e1=1.4218442214003044 rho=1.290256921141655 tau=3 mono_ratio=2.1503183841705322
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.80066067540918462 e1=0.95057310070621437 rho=1.1872359036906361 tau=3 mono_ratio=2.7700638771057129
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.81044439021929182 e1=0.98944847750457054 rho=1.220871523357663 tau=3 mono_ratio=1.3729668855667114
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.82343321996397401 e1=0.77181472137693796 rho=1.0668793909865673 tau=3 mono_ratio=1.0001471042633057
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.89921911408928024 e1=1.1108187383438841 rho=1.2353148645350973 tau=3 mono_ratio=2.8253705501556396
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.82652040344200672 e1=0.81045437343866644 rho=1.0198234848377095 tau=3 mono_ratio=1.5852831602096558
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.93400374962287536 e1=0.94610604531733344 rho=1.012957438004277 tau=3 mono_ratio=1.670534610748291
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.0801834680814251 e1=1.427384477321662 rho=1.3214278121988781 tau=3 mono_ratio=2.4317295551300049
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.9413901524347188 e1=1.2042650398612171 rho=1.2792411695271972 tau=3 mono_ratio=2.3414602279663086
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.0579182595796399 e1=1.2477573833609699 rho=1.17944592777642 tau=3 mono_ratio=2.3112194538116455
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.0491954690284668 e1=1.1600442809592706 rho=1.1056512490735364 tau=3 mono_ratio=2.3317999839782715
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.6844703436198919 e1=0.64570098127735043 rho=1.0600422849068685 tau=3 mono_ratio=1.0039447546005249
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.77810589683741604 e1=0.8650071034857818 rho=1.1116830072743178 tau=3 mono_ratio=2.8102962970733643
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=0.99063477568816727 e1=0.96762949228374673 rho=1.0237748885953752 tau=3 mono_ratio=1.1118438243865967
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.81408439291350443 e1=0.79614593264760058 rho=1.0225316232963944 tau=3 mono_ratio=1.3874162435531616
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.2300942916022015 e1=1.5945389174985378 rho=1.2962737312806909 tau=3 mono_ratio=1.8921078443527222
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.75419396481881384 e1=0.92186844513899457 rho=1.2223227550463625 tau=3 mono_ratio=2.1093490123748779
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.70846005022078085 e1=1.0574782281663262 rho=1.4926434134770703 tau=3 mono_ratio=2.8221056461334229
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=0.99298495786544261 e1=1.1094533111281528 rho=1.1172911555435683 tau=3 mono_ratio=1.9909747838973999
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.98183725724815485 e1=1.2866667853390972 rho=1.310468487043194 tau=3 mono_ratio=1.3296964168548584
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.97753136572966026 e1=1.1073735899801742 rho=1.1328266577111508 tau=3 mono_ratio=2.5568835735321045
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.75174629793109982 e1=0.79703033804788737 rho=1.0602384610089552 tau=3 mono_ratio=1.89975905418396
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.93578763543062626 e1=1.1588918466176084 rho=1.238413292184505 tau=3 mono_ratio=2.1427779197692871
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.8797062971058438 e1=0.98396952220901734 rho=1.1185204940872537 tau=3 mono_ratio=2.7693252563476562
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.7882485594545191 e1=0.74977948095828728 rho=1.0513071902097901 tau=3 mono_ratio=2.2641026973724365
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0008930989975564 e1=1.0270801616135052 rho=1.0261636958192766 tau=3 mono_ratio=1.4731904268264771
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.90529412216512328 e1=0.84770823364759251 rho=1.0679312600301332 tau=3 mono_ratio=1.9959590435028076
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0895612582195522 e1=1.1173106214063466 rho=1.0254683827568092 tau=3 mono_ratio=2.5743935108184814
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.8927631903660963 e1=1.2318297556256599 rho=1.379794517223238 tau=3 mono_ratio=1.3716198205947876
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.65282283125060547 e1=0.70198789654323468 rho=1.0753114977966269 tau=3 mono_ratio=1.255154013633728
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.84649298179818588 e1=1.0857206488450697 rho=1.2826103368938602 tau=3 mono_ratio=2.0458636283874512
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.76030109593031936 e1=0.69330942736294232 rho=1.0966259303952628 tau=3 mono_ratio=1.3627157211303711
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0955847452149354 e1=1.182827016339685 rho=1.079630782945963 tau=3 mono_ratio=2.3773541450500488
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.91254484991818674 e1=0.99957647979194719 rho=1.0953724409120174 tau=3 mono_ratio=1.8916219472885132
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0566475848384744 e1=1.0311783761256692 rho=1.0246991299253179 tau=3 mono_ratio=1.7990248203277588
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.76757833479163773 e1=1.1531812429209909 rho=1.5023629382812946 tau=3 mono_ratio=2.1938228607177734
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.74594442522670912 e1=0.91928542441628391 rho=1.2323778998743971 tau=3 mono_ratio=2.4528701305389404
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.83122570245567029 e1=0.7741721779761257 rho=1.0736961699592462 tau=3 mono_ratio=1.1782670021057129
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=1.0259056225422645 e1=1.261159855737406 rho=1.2293137183348812 tau=3 mono_ratio=1.8635506629943848
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.91257553439884598 e1=0.92128036911333011 rho=1.0095387552885469 tau=3 mono_ratio=1.3168708086013794
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.83723463955917476 e1=0.80461103275798762 rho=1.0405458108731327 tau=3 mono_ratio=2.2138626575469971
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.93299793661690056 e1=1.1379356115153987 rho=1.2196550138384636 tau=3 mono_ratio=2.8243997097015381
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.97997575985295593 e1=1.0048764269049439 rho=1.0254094724040062 tau=3 mono_ratio=2.0639853477478027
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.2571468698086701 e1=1.3516647666116719 rho=1.0751844505982044 tau=3 mono_ratio=2.4570636749267578
+[TagStereo] fail tag_id=80 dir=L2R reason=stereo_ratio_weak e0=1.1561229904525643 e1=1.3593162385271422 rho=1.1757540067768084 tau=3 mono_ratio=2.8056542873382568
+[TagStereo] fail tag_id=80 dir=R2L reason=stereo_ratio_weak e0=1.1977952414672439 e1=1.198029247477794 rho=1.0001953639505765 tau=3 mono_ratio=1.1431871652603149
+[TagStereo] fail tag_id=81 dir=L2R reason=stereo_ratio_weak e0=1.0383626474812884 e1=1.3641912594961363 rho=1.3137907671191809 tau=3 mono_ratio=2.8924722671508789
+[TagStereo] fail tag_id=81 dir=R2L reason=stereo_ratio_weak e0=1.1280490630420754 e1=1.2032200404967643 rho=1.0666380389389563 tau=3 mono_ratio=1.1903363466262817
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.88531221282838313 e1=1.2731253114996657 rho=1.4380523532983358 tau=3 mono_ratio=2.1835916042327881
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.2503102373910375 e1=1.573164686714384 rho=1.2582194717839086 tau=3 mono_ratio=2.4277572631835938
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.102072561237482 e1=1.3014652738819483 rho=1.1809252126190761 tau=3 mono_ratio=2.0259552001953125
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.63605578376431549 e1=0.67684194477419701 rho=1.0641235595789675 tau=3 mono_ratio=1.4026601314544678
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.87840997271240839 e1=1.1327851181687758 rho=1.2895859030166819 tau=3 mono_ratio=2.152226448059082
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.87226977802448324 e1=0.96751471090837093 rho=1.1091920586660773 tau=3 mono_ratio=2.6864111423492432
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=0.93758210860119429 e1=0.94449930854481046 rho=1.0073777004411468 tau=3 mono_ratio=1.5111072063446045
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.61091246199948535 e1=0.69365635160911299 rho=1.1354431193028343 tau=3 mono_ratio=1.9170209169387817
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.054598537529867 e1=1.1377039041829169 rho=1.0788028464072219 tau=3 mono_ratio=2.6213395595550537
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.91928053321695791 e1=0.90154044597424365 rho=1.0196775278383279 tau=3 mono_ratio=1.1800429821014404
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.9216077912519447 e1=1.1376875093043086 rho=1.2344595172360404 tau=3 mono_ratio=2.5810303688049316
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0289493249202766 e1=1.0650182536779718 rho=1.0350541351736984 tau=3 mono_ratio=1.4651590585708618
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.0936132435206947 e1=1.4488148331426161 rho=1.3247963495336033 tau=3 mono_ratio=2.9584059715270996
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.97892942968768726 e1=1.2063936369684736 rho=1.2323601683126386 tau=3 mono_ratio=2.7622594833374023
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.64939638078790118 e1=0.84827243269341912 rho=1.3062475515462184 tau=3 mono_ratio=2.049879789352417
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.63271867156177219 e1=0.63773304285823673 rho=1.0079251198264185 tau=3 mono_ratio=1.218114972114563
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.93769790735438929 e1=1.1773182230987393 rho=1.2555410581696522 tau=3 mono_ratio=2.9933962821960449
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.86544264162849394 e1=0.94982763124706848 rho=1.0975050054874615 tau=3 mono_ratio=2.460195779800415
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.75644958833091247 e1=0.75250687150396067 rho=1.0052394429486504 tau=3 mono_ratio=1.5188640356063843
+[TagStereo] fail tag_id=81 dir=L2R reason=stereo_ratio_weak e0=1.1373284935015586 e1=1.4676496961743233 rho=1.2904360563106527 tau=3 mono_ratio=2.6892292499542236
+[TagStereo] fail tag_id=81 dir=R2L reason=stereo_ratio_weak e0=1.1104832761299059 e1=1.2038778384745468 rho=1.0841026283493644 tau=3 mono_ratio=2.0542068481445312
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0873463759570547 e1=1.1210953536130155 rho=1.0310379271694521 tau=3 mono_ratio=1.8616888523101807
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.99663518055899547 e1=1.0843056336693657 rho=1.0879664442240851 tau=3 mono_ratio=2.3767232894897461
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.66184784335361857 e1=0.85507858359893973 rho=1.2919564396769114 tau=3 mono_ratio=1.9000363349914551
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.12141453981209 e1=1.3921112652143675 rho=1.2413886351127996 tau=3 mono_ratio=2.0525240898132324
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.95039831330172142 e1=1.0678229025389649 rho=1.1235530276834698 tau=3 mono_ratio=2.0412395000457764
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.77125820857921046 e1=0.82854820984617761 rho=1.0742812206799379 tau=3 mono_ratio=1.9343324899673462
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=1.0218392311575415 e1=1.262895391883992 rho=1.2359041942610458 tau=3 mono_ratio=2.3347072601318359
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.91541814693286216 e1=1.167549061335706 rho=1.275427043883923 tau=3 mono_ratio=2.2564148902893066
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.9848681880268878 e1=1.0027862469641866 rho=1.0181933573821722 tau=3 mono_ratio=1.8910011053085327
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.89839598683537336 e1=0.87835151206013262 rho=1.0228205615601513 tau=3 mono_ratio=1.2867166996002197
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.92877180391284919 e1=1.132439373463392 rho=1.2192869857517412 tau=3 mono_ratio=1.0035234689712524
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.83852538823567735 e1=0.85642113516912566 rho=1.0213419261517656 tau=3 mono_ratio=2.0612289905548096
+[TagStereo] fail tag_id=80 dir=L2R reason=stereo_ratio_weak e0=1.0688277975623282 e1=1.2803660503115293 rho=1.1979161217866334 tau=3 mono_ratio=1.4811728000640869
+[TagStereo] fail tag_id=80 dir=R2L reason=stereo_ratio_weak e0=1.0181225000795198 e1=1.0377331647461652 rho=1.0192615963657146 tau=3 mono_ratio=1.8185263872146606
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.78921879925000304 e1=0.96467585658769039 rho=1.222317381798441 tau=3 mono_ratio=2.1096537113189697
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.89004569656118204 e1=1.2090530580136916 rho=1.3584168344688627 tau=3 mono_ratio=2.506401538848877
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.94899895897842723 e1=1.1991866593618157 rho=1.2636332714095659 tau=3 mono_ratio=1.1292304992675781
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.83277395655712561 e1=0.91507067404384712 rho=1.0988223956091665 tau=3 mono_ratio=1.6831276416778564
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=0.97190351046943413 e1=1.1246167769284541 rho=1.157128011841557 tau=3 mono_ratio=2.7118351459503174
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=0.99414986162775554 e1=1.0609499418578745 rho=1.0671931695021835 tau=3 mono_ratio=2.3460545539855957
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.99301963284506833 e1=0.88741613673745301 rho=1.1190010995031721 tau=3 mono_ratio=2.2220704555511475
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.1116055307243078 e1=1.2189949843294696 rho=1.0966075199703089 tau=3 mono_ratio=2.6518127918243408
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.65955415562034769 e1=0.68674262940932751 rho=1.0412225038930807 tau=3 mono_ratio=1.3105045557022095
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.93082866721602275 e1=1.1560535336485627 rho=1.2419616779360634 tau=3 mono_ratio=2.2704761028289795
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.89111083206728536 e1=0.97778630887180051 rho=1.0972667748928269 tau=3 mono_ratio=1.17267906665802
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.8987933443485272 e1=1.23728144648044 rho=1.3766028129643713 tau=3 mono_ratio=1.8491626977920532
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.82608626328752055 e1=1.1976797377216162 rho=1.4498240565161631 tau=3 mono_ratio=1.7969132661819458
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71075544099251609 e1=0.90850411242108076 rho=1.2782232252407388 tau=3 mono_ratio=1.8413406610488892
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.83280168650378739 e1=1.1905028520311882 rho=1.4295154187301935 tau=3 mono_ratio=2.499990701675415
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.68448936843321495 e1=0.82491885691642375 rho=1.2051594878668315 tau=3 mono_ratio=1.9479371309280396
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.7701769453516395 e1=0.92922779909782827 rho=1.2065120937462739 tau=3 mono_ratio=2.7781262397766113
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.74716896636016528 e1=0.82002701134113398 rho=1.0975121400429473 tau=3 mono_ratio=1.0787814855575562
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.82295578466453068 e1=0.90095811259196079 rho=1.0947831332936602 tau=3 mono_ratio=1.836021900177002
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0250480542540927 e1=1.0048720461289029 rho=1.0200781862554902 tau=3 mono_ratio=1.2417584657669067
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.69285154348673306 e1=0.67329001471404748 rho=1.0290536445159371 tau=3 mono_ratio=1.9778354167938232
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.0017905750604983 e1=1.1124787376302321 rho=1.1104903212455945 tau=3 mono_ratio=1.5098097324371338
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=0.9615476917490936 e1=0.97162267901687738 rho=1.010477886165978 tau=3 mono_ratio=1.110832691192627
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.93318948767948129 e1=1.3148403433661335 rho=1.4089746619700048 tau=3 mono_ratio=1.3422499895095825
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.6349859205236309 e1=0.83566963367316227 rho=1.3160443505077979 tau=3 mono_ratio=1.8543686866760254
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.7728801367035868 e1=1.1305013444856009 rho=1.4627123797547612 tau=3 mono_ratio=2.7884762287139893
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.70518351770060372 e1=0.87304235850303069 rho=1.2380356834086674 tau=3 mono_ratio=2.7824671268463135
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.75799040758418113 e1=0.91539819477237339 rho=1.2076646160763536 tau=3 mono_ratio=2.499030590057373
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=1.0763115665104794 e1=0.96209628368845979 rho=1.1187150232671403 tau=3 mono_ratio=1.5152889490127563
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.91239587087952367 e1=1.0563456599922958 rho=1.1577711972942595 tau=3 mono_ratio=1.9515377283096313
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.94449982209130234 e1=0.94539853268052365 rho=1.000951520124461 tau=3 mono_ratio=2.5376758575439453
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.87548808026298175 e1=1.0842282290770753 rho=1.2384271736891774 tau=3 mono_ratio=1.2017558813095093
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.2867042805509403 e1=1.240226778881022 rho=1.037475002494606 tau=3 mono_ratio=1.4962610006332397
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.050361236017801 e1=0.96863752100762335 rho=1.0843697597433506 tau=3 mono_ratio=1.1513899564743042
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.1614130532816933 e1=1.0234467514749241 rho=1.1348055494564184 tau=3 mono_ratio=1.5733473300933838
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.77842548481978846 e1=0.87997008944908495 rho=1.1304487153607981 tau=3 mono_ratio=1.1808044910430908
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=1.0455234526384654 e1=1.0289052180448519 rho=1.0161513755455924 tau=3 mono_ratio=1.8424612283706665
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.861814034691052 e1=1.079856789466922 rho=1.253004413650598 tau=3 mono_ratio=1.0903215408325195
+[TagStereo] fail tag_id=80 dir=L2R reason=stereo_ratio_weak e0=1.1220732057596774 e1=1.3137705880421864 rho=1.1708421350119327 tau=3 mono_ratio=2.7761964797973633
+[TagStereo] fail tag_id=80 dir=R2L reason=stereo_ratio_weak e0=1.0741703785496026 e1=1.0888934305475504 rho=1.0137064401311466 tau=3 mono_ratio=1.0634684562683105
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.0098903316312151 e1=1.3320446637305359 rho=1.3189993226887962 tau=3 mono_ratio=2.456446647644043
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.99962584112382435 e1=1.2513171410728652 rho=1.2517855074797715 tau=3 mono_ratio=2.3535737991333008
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.7023421260502998 e1=1.8452908960217824 rho=1.0839718219387393 tau=3 mono_ratio=2.169687032699585
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=3.0199082152741323 e1=3.1090144524838541 rho=1.029506273313054 tau=3 mono_ratio=1.3259310722351074
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.9645272414923598 e1=1.2288098371961467 rho=1.274002209643011 tau=3 mono_ratio=1.9489223957061768
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.96504528208892815 e1=1.0581188550103657 rho=1.0964447726468614 tau=3 mono_ratio=1.3946563005447388
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.6005555657910423 e1=0.71599419151067145 rho=1.1922197247066648 tau=3 mono_ratio=1.6588037014007568
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.79645819083087466 e1=0.99164087832022452 rho=1.2450633184406952 tau=3 mono_ratio=2.6939048767089844
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=1.0955602333884935 e1=1.193432394138346 rho=1.0893352621587999 tau=3 mono_ratio=1.2923929691314697
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.71436268458303953 e1=0.70758027498970888 rho=1.0095853570590898 tau=3 mono_ratio=1.2246552705764771
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.0862561036598346 e1=0.90063873590926646 rho=1.2060952523400823 tau=3 mono_ratio=1.3374061584472656
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.87514599285719585 e1=0.88931212921503555 rho=1.0161871692920659 tau=3 mono_ratio=1.090793251991272
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0325299076838219 e1=1.1179520093843147 rho=1.0827308739263364 tau=3 mono_ratio=1.0850802659988403
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.69414907363193445 e1=1.0416108219102027 rho=1.50055782104515 tau=3 mono_ratio=1.4847218990325928
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.5643741295875102 e1=1.690702677508148 rho=1.0807534115085335 tau=3 mono_ratio=1.7579629421234131
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=2.8987686771100334 e1=2.9707315376262917 rho=1.0248253201642765 tau=3 mono_ratio=1.3514472246170044
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=0.92497694990195611 e1=1.0857974589427661 rho=1.17386434211576 tau=3 mono_ratio=1.4553920030593872
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.66428574099324833 e1=0.82061068087483879 rho=1.2353278566728283 tau=3 mono_ratio=1.5781258344650269
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.77517962557614983 e1=0.97236170603390937 rho=1.2543695341022862 tau=3 mono_ratio=2.5319111347198486
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.97552917256733662 e1=1.2736043877834355 rho=1.3055523333311407 tau=3 mono_ratio=2.9967360496520996
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.9373835188617935 e1=1.0665831841821005 rho=1.1378301011088354 tau=3 mono_ratio=1.6315062046051025
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=1.1141179856740802 e1=1.2422034273648457 rho=1.1149657785107057 tau=3 mono_ratio=1.8695312738418579
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0123121884505291 e1=0.96414376249814993 rho=1.0499597962212734 tau=3 mono_ratio=2.4091422557830811
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.82263402415651221 e1=0.81954407332335366 rho=1.0037703290524183 tau=3 mono_ratio=1.8961591720581055
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.0888439816409814 e1=1.2992180517948386 rho=1.1932086446798345 tau=3 mono_ratio=1.6644749641418457
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.85121246618891655 e1=0.88755475266853789 rho=1.0426947300239149 tau=3 mono_ratio=1.8888659477233887
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.075963604331083 e1=1.1535811896346293 rho=1.0721377423167233 tau=3 mono_ratio=1.4970521926879883
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.84755232564359018 e1=0.73592585601714233 rho=1.1516816790198032 tau=3 mono_ratio=1.3545024394989014
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.71963411574342351 e1=1.057107465347082 rho=1.4689512930971567 tau=3 mono_ratio=1.2003365755081177
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.1410287648805122 e1=1.3322637423825219 rho=1.1675987347737347 tau=3 mono_ratio=2.5659027099609375
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.82255815913911146 e1=0.86747856319217764 rho=1.0546106114192209 tau=3 mono_ratio=1.7872409820556641
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=1.017566478546136 e1=1.2473572374429058 rho=1.225823829219751 tau=3 mono_ratio=2.8992629051208496
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.93913505035500056 e1=1.0290873950729937 rho=1.0957821184378205 tau=3 mono_ratio=2.2675073146820068
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.76529712587820509 e1=1.0066643530773201 rho=1.3153902173704723 tau=3 mono_ratio=2.6014249324798584
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.81502655626832254 e1=0.81524037577048947 rho=1.0002623466686578 tau=3 mono_ratio=2.8393387794494629
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.95301505997624936 e1=1.1471256241742842 rho=1.2036804790883284 tau=3 mono_ratio=1.0018553733825684
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.1767706997697962 e1=1.1216128067532363 rho=1.0491773031078788 tau=3 mono_ratio=1.8699462413787842
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.4502287210002305 e1=1.6103891116691078 rho=1.1104380214232523 tau=3 mono_ratio=2.3427574634552002
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=2.9043061554123306 e1=2.9966542198413664 rho=1.031796945451203 tau=3 mono_ratio=1.353449821472168
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.70846208086369589 e1=0.87402658551863943 rho=1.2336956470830533 tau=3 mono_ratio=1.8790086507797241
+[TagStereo] fail tag_id=103 dir=L2R reason=stereo_ratio_weak e0=1.15117274406654 e1=1.5038969341715638 rho=1.3064042226648056 tau=3 mono_ratio=2.4245607852935791
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.93947804449166017 e1=1.062895789079334 rho=1.1313684180060699 tau=3 mono_ratio=2.0297784805297852
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0399579854377643 e1=1.0019210519302479 rho=1.0379640026489836 tau=3 mono_ratio=1.7600363492965698
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.9016883700587186 e1=1.002475673834935 rho=1.1117762045193917 tau=3 mono_ratio=1.9594051837921143
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.65083225868990846 e1=0.65501084432334944 rho=1.0064203726401513 tau=3 mono_ratio=1.3747298717498779
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=1.0402715887573102 e1=1.2662067492384299 rho=1.2171886291096627 tau=3 mono_ratio=2.7598185539245605
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.87865702466508377 e1=1.145423976896691 rho=1.3036076016460265 tau=3 mono_ratio=1.8128528594970703
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.9465467132814912 e1=0.95453898637083578 rho=1.0084436118880951 tau=3 mono_ratio=1.5543035268783569
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.0002376238098776 e1=1.1001290807826345 rho=1.0998677259233716 tau=3 mono_ratio=1.8357707262039185
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.1086179852199363 e1=1.094963520588915 rho=1.0124702461422708 tau=3 mono_ratio=2.1517117023468018
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.84225853653321003 e1=0.83027229106815403 rho=1.014436523511099 tau=3 mono_ratio=1.7407857179641724
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.1183567289514065 e1=0.93809066660597618 rho=1.1921627285830192 tau=3 mono_ratio=1.2716941833496094
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0354182991571723 e1=1.0819262115386514 rho=1.0449170276152346 tau=3 mono_ratio=1.9840898513793945
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.1333485718936798 e1=1.0535173465893617 rho=1.0757759001187654 tau=3 mono_ratio=1.0115615129470825
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.84179448756091824 e1=1.2463318774884364 rho=1.4805655007543366 tau=3 mono_ratio=2.9400238990783691
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71158249041525456 e1=0.86762650810907394 rho=1.2192915362257803 tau=3 mono_ratio=2.502964973449707
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.85606661854374122 e1=1.0147353728294493 rho=1.1853462693946344 tau=3 mono_ratio=2.1172587871551514
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.77092984107683682 e1=0.97508442843604914 rho=1.2648160393029184 tau=3 mono_ratio=2.0176830291748047
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.93731903090335678 e1=1.2336173982143563 rho=1.3161126118492703 tau=3 mono_ratio=1.3550559282302856
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.77749048772782725 e1=0.85765328718177258 rho=1.1031045403334929 tau=3 mono_ratio=2.7769155502319336
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=0.9982855043448039 e1=0.98506182437435796 rho=1.0134242132116129 tau=3 mono_ratio=1.8203707933425903
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.86951737770353499 e1=1.1314406269036306 rho=1.3012283085021574 tau=3 mono_ratio=1.5024107694625854
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.94745874421118059 e1=0.92292809657853481 rho=1.0265791535624567 tau=3 mono_ratio=2.6833641529083252
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.89955444691956588 e1=1.0017633437887918 rho=1.1136216902774574 tau=3 mono_ratio=1.1328940391540527
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.67380785937517895 e1=1.0299393587083665 rho=1.5285356854324796 tau=3 mono_ratio=1.2806128263473511
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.77413250462963468 e1=1.1665533414794969 rho=1.5069168830866879 tau=3 mono_ratio=2.8327593803405762
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.0598574890840295 e1=1.4736534585906325 rho=1.3904260463109956 tau=3 mono_ratio=2.0112221240997314
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71954059980470553 e1=0.9183167889391961 rho=1.2762543057503457 tau=3 mono_ratio=2.4249053001403809
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.104826693263808 e1=1.4100796684590706 rho=1.2762903691412573 tau=3 mono_ratio=2.2653324604034424
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.95625622843500346 e1=0.87301853436489207 rho=1.0953447042625744 tau=3 mono_ratio=1.057991623878479
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0292280011686443 e1=1.1692987546702487 rho=1.1360930262356514 tau=3 mono_ratio=2.7623589038848877
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.87360302734472228 e1=1.1203432292083162 rho=1.2824397281807851 tau=3 mono_ratio=1.7380672693252563
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.96067896850960688 e1=0.94563133686863798 rho=1.0159127886718358 tau=3 mono_ratio=2.9727699756622314
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.89289396952926126 e1=1.0009992743741629 rho=1.1210729475312982 tau=3 mono_ratio=2.3087849617004395
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.75047880288823099 e1=1.0752161711082298 rho=1.4327069152886589 tau=3 mono_ratio=1.0313041210174561
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.96203967559533865 e1=1.2927943206826635 rho=1.3438056175165942 tau=3 mono_ratio=2.0787224769592285
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71947636895437694 e1=0.86604266345877912 rho=1.2037124506447601 tau=3 mono_ratio=1.85325026512146
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.71776909749833928 e1=0.71959527562251646 rho=1.0025442417735699 tau=3 mono_ratio=1.7963213920593262
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.96062553107544457 e1=1.1673152822228661 rho=1.2151616256762046 tau=3 mono_ratio=1.4696823358535767
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0439657690151134 e1=1.102996489906835 rho=1.0565446900532638 tau=3 mono_ratio=1.5078898668289185
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.3633836749624766 e1=1.0087323014425054 rho=1.3515812596277843 tau=3 mono_ratio=1.1057345867156982
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.2722218197374047 e1=1.6202332710396063 rho=1.2735462052525459 tau=3 mono_ratio=2.1076745986938477
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.9876905135412386 e1=1.2298655481343659 rho=1.245193237180791 tau=3 mono_ratio=2.0996992588043213
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.66829100442500899 e1=0.85599551842652311 rho=1.2808724230578874 tau=3 mono_ratio=2.8717787265777588
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.91392994787157322 e1=1.2206396145511549 rho=1.335594283848861 tau=3 mono_ratio=2.6175670623779297
+[TagStereo] fail tag_id=103 dir=L2R reason=stereo_ratio_weak e0=1.0498983251872902 e1=1.3792883469213439 rho=1.3137351622706503 tau=3 mono_ratio=1.853743314743042
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.76009106289310402 e1=0.79586833515900213 rho=1.0470697183080284 tau=3 mono_ratio=1.1146727800369263
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.94509903151061803 e1=1.1608125868542321 rho=1.2282443933632856 tau=3 mono_ratio=2.3937084674835205
+[TagStereo] fail tag_id=93 dir=L2R reason=stereo_ratio_weak e0=1.4931198631500424 e1=1.0763516294893904 rho=1.3872045360038687 tau=3 mono_ratio=1.0152895450592041
+[TagStereo] fail tag_id=93 dir=R2L reason=stereo_ratio_weak e0=0.96940712587141553 e1=1.1355529038912955 rho=1.1713890618445164 tau=3 mono_ratio=2.0867428779602051
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.92008421382591288 e1=0.9258709223227195 rho=1.0062893248287077 tau=3 mono_ratio=1.3712891340255737
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.1129248497986495 e1=0.90287894775135036 rho=1.2326401588361156 tau=3 mono_ratio=1.1324677467346191
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0042182327658391 e1=1.0226279773150309 rho=1.0183324141408534 tau=3 mono_ratio=1.2110970020294189
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.99294962740660131 e1=1.3566314297604598 rho=1.3662641003627378 tau=3 mono_ratio=1.2469563484191895
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.94458578964694484 e1=1.0413423780190483 rho=1.1024328222276509 tau=3 mono_ratio=2.1873228549957275
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.67989248838480387 e1=0.64930428745930191 rho=1.0471091928224947 tau=3 mono_ratio=1.5660138130187988
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.98757478243126395 e1=1.1998072696300086 rho=1.2149026997847767 tau=3 mono_ratio=2.6787519454956055
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.74869371308480426 e1=1.0187056529059411 rho=1.3606440587673383 tau=3 mono_ratio=1.5944292545318604
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.92398997331571109 e1=0.95147703811779594 rho=1.0297482284073929 tau=3 mono_ratio=2.8677349090576172
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.72624443531501293 e1=0.72185540999841902 rho=1.0060802000646132 tau=3 mono_ratio=1.8755060434341431
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.89891973927423918 e1=0.87541509718404986 rho=1.0268497106560615 tau=3 mono_ratio=1.0777972936630249
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.1003016540080952 e1=1.1945686878216406 rho=1.0856738089818212 tau=3 mono_ratio=1.8570939302444458
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.78971005507798508 e1=0.9688812667916793 rho=1.2268822719613448 tau=3 mono_ratio=2.0266482830047607
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.71650460672974714 e1=1.0937403788899134 rho=1.5264945515918482 tau=3 mono_ratio=2.7435123920440674
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.1056943015053984 e1=1.3933056118063776 rho=1.260118289159381 tau=3 mono_ratio=1.8803557157516479
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.96624565449625177 e1=1.0998681415946554 rho=1.1382903885138578 tau=3 mono_ratio=2.2680280208587646
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.71231019039789822 e1=0.89562381571014171 rho=1.2573508388985608 tau=3 mono_ratio=2.5496742725372314
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.99416065435945467 e1=1.1953236520549286 rho=1.2023445573016973 tau=3 mono_ratio=2.3950941562652588
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.60503012555938174 e1=0.62251442677773028 rho=1.0288982324198901 tau=3 mono_ratio=1.4283211231231689
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.90821290699884782 e1=1.1168173388747866 rho=1.2296867067608377 tau=3 mono_ratio=2.1244521141052246
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=1.0508855167825644 e1=1.1983611585126817 rho=1.1403346408667809 tau=3 mono_ratio=2.168184757232666
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.1250231974022251 e1=1.0930044006927702 rho=1.0292942980466195 tau=3 mono_ratio=1.4204648733139038
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.72905164353613083 e1=0.69274373165915881 rho=1.0524117507892865 tau=3 mono_ratio=1.2753332853317261
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0337070864322453 e1=0.98560722274417079 rho=1.048802263751021 tau=3 mono_ratio=1.0676363706588745
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.92130058639146428 e1=1.0044191317299536 rho=1.0902187043794558 tau=3 mono_ratio=2.2364046573638916
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.0583255637219129 e1=1.4756218132218557 rho=1.394298563135997 tau=3 mono_ratio=2.3344473838806152
+[TagStereo] fail tag_id=82 dir=R2L reason=stereo_ratio_weak e0=1.0935017896969543 e1=0.91788488065802221 rho=1.1913278152285356 tau=3 mono_ratio=1.0181484222412109
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.0341918148071765 e1=0.89443300515345114 rho=1.1562540835280268 tau=3 mono_ratio=1.1071979999542236
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.0313280508244302 e1=1.0904302971839226 rho=1.0573069318292465 tau=3 mono_ratio=2.7767808437347412
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.64897589650577903 e1=0.73404005001694828 rho=1.1310744418060792 tau=3 mono_ratio=1.8134064674377441
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0928746808603951 e1=1.0034019150749145 rho=1.0891694189059138 tau=3 mono_ratio=1.5522502660751343
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.88357351464488221 e1=1.1112915907328578 rho=1.2577239720927738 tau=3 mono_ratio=2.8597033023834229
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.92801976385099938 e1=0.94157943202935745 rho=1.0146114002006577 tau=3 mono_ratio=2.9809474945068359
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.85145464512706448 e1=0.84459733932417025 rho=1.008119023676137 tau=3 mono_ratio=2.3768815994262695
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.048070867145559 e1=1.0261886528851301 rho=1.0213237733408798 tau=3 mono_ratio=1.0940605401992798
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.90843511837027302 e1=1.1895712455088931 rho=1.3094729839743577 tau=3 mono_ratio=1.1585468053817749
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=1.109961435926031 e1=1.3149282768504511 rho=1.1846612270531334 tau=3 mono_ratio=1.9792459011077881
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.96317852329407438 e1=0.97580361503373159 rho=1.0131077379958302 tau=3 mono_ratio=2.968034029006958
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.84420515131107499 e1=0.9343715173716115 rho=1.1068062257304392 tau=3 mono_ratio=1.2155865430831909
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.2688066878854323 e1=1.3308906243503034 rho=1.0489309656141614 tau=3 mono_ratio=1.4182069301605225
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.4696817594809126 e1=1.110833557079677 rho=1.3230440778378938 tau=3 mono_ratio=1.1060882806777954
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=1.0361313004734358 e1=1.3211256628490033 rho=1.2750562230581104 tau=3 mono_ratio=1.8001008033752441
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.214240539852306 e1=1.5690295255253035 rho=1.2921900346235864 tau=3 mono_ratio=1.8193206787109375
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71858353572451084 e1=0.89929439582027104 rho=1.2514820488644742 tau=3 mono_ratio=1.9550696611404419
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.3318687930524968 e1=1.0241803201686337 rho=1.300424121147707 tau=3 mono_ratio=1.3043568134307861
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=1.0150701328740772 e1=1.1471111991966529 rho=1.1300807322727868 tau=3 mono_ratio=1.9944738149642944
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.69899797454652168 e1=0.73153202400134898 rho=1.0465438393142557 tau=3 mono_ratio=1.1106457710266113
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.86893368689196582 e1=1.0766998034214215 rho=1.2391046859208517 tau=3 mono_ratio=2.33445143699646
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.922209182987209 e1=0.86379898076613881 rho=1.0676201332185453 tau=3 mono_ratio=1.1283358335494995
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.88976595030653771 e1=0.91986711353255601 rho=1.033830428307374 tau=3 mono_ratio=1.4930039644241333
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.97256326440399599 e1=0.8583250009956056 rho=1.1330944142868802 tau=3 mono_ratio=2.0066063404083252
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0850961712330489 e1=1.0765838144013233 rho=1.0079068222185306 tau=3 mono_ratio=1.8652262687683105
+[TagStereo] fail tag_id=81 dir=L2R reason=stereo_ratio_weak e0=0.98075605014494938 e1=1.3330853349287797 rho=1.3592425296509931 tau=3 mono_ratio=2.8612971305847168
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.69689948952621505 e1=1.0699937082022386 rho=1.5353630240055243 tau=3 mono_ratio=2.2989554405212402
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.89318183063210155 e1=1.2162137315197925 rho=1.3616642092880666 tau=3 mono_ratio=2.6979596614837646
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.67331287143805951 e1=0.84041559374236485 rho=1.2481799014167485 tau=3 mono_ratio=2.4936699867248535
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.2641290986254463 e1=1.1024791635635114 rho=1.1466240272449364 tau=3 mono_ratio=2.6475915908813477
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.091896480613876 e1=1.1760376776555659 rho=1.077059683274485 tau=3 mono_ratio=2.8041443824768066
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.83326719046865838 e1=0.7430250087725464 rho=1.1214524148032874 tau=3 mono_ratio=1.2084968090057373
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.94161343313465073 e1=1.0501878991824445 rho=1.1153068362364378 tau=3 mono_ratio=2.6950454711914062
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.81709017711563992 e1=0.83440155991205978 rho=1.0211866245122945 tau=3 mono_ratio=2.7389087677001953
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.95765475932090605 e1=1.1048877552217609 rho=1.1537432924695303 tau=3 mono_ratio=1.6071333885192871
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=0.99486752809854384 e1=1.0142958638758146 rho=1.0195285655718154 tau=3 mono_ratio=2.1730291843414307
+[TagStereo] fail tag_id=93 dir=L2R reason=stereo_ratio_weak e0=1.323213377732207 e1=1.6906783868198012 rho=1.2777065399986121 tau=3 mono_ratio=2.8098671436309814
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.75174222649965694 e1=0.75984057077339984 rho=1.0107727675491618 tau=3 mono_ratio=2.1309788227081299
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.1453995249497395 e1=1.3590736404096744 rho=1.1865498549798692 tau=3 mono_ratio=2.8139183521270752
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0776038407909219 e1=1.033872004654059 rho=1.0422990814121103 tau=3 mono_ratio=1.3651797771453857
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.1471059917025892 e1=1.2435581146443973 rho=1.0840830085060982 tau=3 mono_ratio=1.9779118299484253
+[TagStereo] fail tag_id=81 dir=L2R reason=stereo_ratio_weak e0=1.0399778516536313 e1=1.3727126255614246 rho=1.3199440959812554 tau=3 mono_ratio=2.875011682510376
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.8244484013621991 e1=1.0238894555397635 rho=1.2419084731150289 tau=3 mono_ratio=2.897789478302002
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.70736283595252325 e1=0.86370167161085076 rho=1.2210164677746855 tau=3 mono_ratio=2.260150671005249
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.0918636057185529 e1=1.3318007688538631 rho=1.2197501241537014 tau=3 mono_ratio=1.388756275177002
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.96378362190969213 e1=1.04780818103045 rho=1.0871819743803961 tau=3 mono_ratio=1.3018418550491333
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.88232454774646718 e1=0.99976795143225239 rho=1.1331068072996937 tau=3 mono_ratio=2.1379990577697754
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.92235479368623263 e1=1.0354866200155355 rho=1.1226554325743905 tau=3 mono_ratio=2.2156674861907959
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0464627001204816 e1=1.0642175507271801 rho=1.0169665393593941 tau=3 mono_ratio=1.5587157011032104
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.88614780070672294 e1=0.92895889698125855 rho=1.0483114624807299 tau=3 mono_ratio=1.70957350730896
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0966265208319308 e1=1.0449027318181345 rho=1.0495010563081748 tau=3 mono_ratio=1.1480312347412109
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.82786718823111327 e1=0.78351404345901732 rho=1.0566079766990264 tau=3 mono_ratio=1.8015329837799072
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.3839862803209653 e1=1.207071402632834 rho=1.1465653789458383 tau=3 mono_ratio=1.0501123666763306
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.86598865858121665 e1=0.75791859318098853 rho=1.1425879589575307 tau=3 mono_ratio=2.1641569137573242
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0468324779223321 e1=1.0690043303477936 rho=1.0211799431827779 tau=3 mono_ratio=1.1688035726547241
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.8674008398602816 e1=1.2500126228728941 rho=1.4411014665758695 tau=3 mono_ratio=2.741569995880127
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.91255991176096884 e1=1.2534318676541276 rho=1.37353378241418 tau=3 mono_ratio=1.9247922897338867
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.96189523686949308 e1=1.2270110950862239 rho=1.2756182251239101 tau=3 mono_ratio=2.3546793460845947
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.8538525072559402 e1=1.0331637752979685 rho=1.2100026249361093 tau=3 mono_ratio=2.7740623950958252
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.86311707072261568 e1=0.79444264517846253 rho=1.0864435285221663 tau=3 mono_ratio=1.2845373153686523
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0221692297812359 e1=1.1406103502273388 rho=1.1158723202375982 tau=3 mono_ratio=2.9968411922454834
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.69825117302995054 e1=0.74721423021972655 rho=1.070122412980971 tau=3 mono_ratio=1.1996579170227051
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.92635593802452754 e1=1.1657697875325101 rho=1.2584469310577213 tau=3 mono_ratio=2.284003734588623
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.68823342845060986 e1=0.67104928063579528 rho=1.0256078775211939 tau=3 mono_ratio=2.6551237106323242
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.1233821479871398 e1=0.92302967004091974 rho=1.2170596289935929 tau=3 mono_ratio=1.0881614685058594
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.99783713081031322 e1=0.90351793598611563 rho=1.1043910596161712 tau=3 mono_ratio=2.7638449668884277
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0087083553903378 e1=0.99229286201250222 rho=1.016542992487117 tau=3 mono_ratio=1.605528712272644
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.95417455007987317 e1=1.0590090688867373 rho=1.1098693301851525 tau=3 mono_ratio=1.4986683130264282
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.70634965708765796 e1=0.65546997979043642 rho=1.0776231998235302 tau=3 mono_ratio=1.0378285646438599
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0138619754341665 e1=0.93348190787268837 rho=1.0861077936245691 tau=3 mono_ratio=1.1290280818939209
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.93547677535163332 e1=1.0675525595747557 rho=1.1411855297340667 tau=3 mono_ratio=1.1037832498550415
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.1085465689856369 e1=1.136499343253615 rho=1.0252156968636332 tau=3 mono_ratio=1.2162408828735352
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.69129212247915528 e1=1.0650934146564632 rho=1.5407284120293891 tau=3 mono_ratio=2.5129570960998535
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=1.0015451820089976 e1=1.4340291012877708 rho=1.4318166834764636 tau=3 mono_ratio=2.9799149036407471
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.91322593890625525 e1=1.3008510874961106 rho=1.4244570063676094 tau=3 mono_ratio=2.1413071155548096
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.0204483418726751 e1=1.4213476375295235 rho=1.3928658402524057 tau=3 mono_ratio=2.4936742782592773
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.77450904438094337 e1=0.91284022349594141 rho=1.178604988463317 tau=3 mono_ratio=2.5678842067718506
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=1.0748956892810109 e1=0.9644906490078512 rho=1.1144697880402066 tau=3 mono_ratio=1.2960063219070435
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.94041607386771386 e1=1.0646917845804269 rho=1.1321497090850927 tau=3 mono_ratio=2.7331147193908691
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.88702885848765634 e1=1.1357577179144585 rho=1.2804067272066737 tau=3 mono_ratio=2.3245866298675537
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=1.0083927637337182 e1=1.0369878306957256 rho=1.0283570727221139 tau=3 mono_ratio=2.8235583305358887
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.1122805754590963 e1=1.0674366361549048 rho=1.0420108676649102 tau=3 mono_ratio=2.9970302581787109
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0537553101522266 e1=0.98724263611259222 rho=1.067372165199596 tau=3 mono_ratio=1.3523489236831665
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.70858547187030196 e1=0.72549556958655359 rho=1.023864584250864 tau=3 mono_ratio=2.0653080940246582
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.1527750943310451 e1=1.3415711144558438 rho=1.1637752419265976 tau=3 mono_ratio=2.2539680004119873
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.70258584175491134 e1=1.0465654907397135 rho=1.4895909197885666 tau=3 mono_ratio=2.7745566368103027
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.3241486540495582 e1=1.1426652032781734 rho=1.1588246934376798 tau=3 mono_ratio=1.2976526021957397
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.1813112211095709 e1=1.2868849860786786 rho=1.0893699839578053 tau=3 mono_ratio=2.7564327716827393
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.0544639981955573 e1=1.3557631286492038 rho=1.2857367635912704 tau=3 mono_ratio=1.9253751039505005
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=1.0840536180012268 e1=1.2176626271131183 rho=1.1232494470476375 tau=3 mono_ratio=2.6205542087554932
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.68495901731506659 e1=0.79097466421627183 rho=1.154776627603201 tau=3 mono_ratio=1.6540676355361938
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=1.0649792282099295 e1=0.97572020553262617 rho=1.0914801416222579 tau=3 mono_ratio=1.0309348106384277
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.74890155823323523 e1=0.77029254049893381 rho=1.0285631429150712 tau=3 mono_ratio=1.4595667123794556
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.72584846795988645 e1=0.93674061291871269 rho=1.2905456909773838 tau=3 mono_ratio=1.9156746864318848
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.85671753278836638 e1=0.87636887953435272 rho=1.0229379532587468 tau=3 mono_ratio=2.1493058204650879
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.98218816971053413 e1=1.0030703217347372 rho=1.0212608465942903 tau=3 mono_ratio=1.0057386159896851
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.64137994590911485 e1=0.63874923668785333 rho=1.0041185320718098 tau=3 mono_ratio=1.9602830410003662
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.85603367065378111 e1=1.0860428317093087 rho=1.268691721683296 tau=3 mono_ratio=2.2189335823059082
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.95125931439118161 e1=1.2092391909586917 rho=1.271198265702578 tau=3 mono_ratio=1.4632633924484253
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.90423212517327134 e1=0.88205777834819132 rho=1.0251393359304264 tau=3 mono_ratio=1.0319993495941162
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.77618594704461152 e1=0.79408126118148314 rho=1.0230554471927171 tau=3 mono_ratio=1.2125720977783203
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.1085047828916668 e1=1.1843583938722801 rho=1.0684287628550519 tau=3 mono_ratio=1.1687464714050293
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.0727160417922075 e1=0.95282061960882214 rho=1.1258321026960731 tau=3 mono_ratio=1.3212525844573975
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.1435170160568493 e1=1.1237173567870777 rho=1.0176197859119689 tau=3 mono_ratio=1.1584830284118652
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.61298305870619041 e1=0.61941948871544661 rho=1.0105001759956322 tau=3 mono_ratio=1.6263712644577026
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=1.2294064383282792 e1=1.0607216244401423 rho=1.1590283537569452 tau=3 mono_ratio=1.2424898147583008
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.70210421588572935 e1=1.0017659200829543 rho=1.4268051622398905 tau=3 mono_ratio=2.1845812797546387
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.80406139437830981 e1=1.0949762016762215 rho=1.3618067090026587 tau=3 mono_ratio=1.4470227956771851
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.90468182368723404 e1=1.1209384031984395 rho=1.2390415874508915 tau=3 mono_ratio=1.6156735420227051
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.80699974487402137 e1=1.1122923457377405 rho=1.3783056964077132 tau=3 mono_ratio=1.4722349643707275
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.99267781528207277 e1=1.2680971275852522 rho=1.2774508584615314 tau=3 mono_ratio=2.6196110248565674
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.85863368730982936 e1=1.0019109481328801 rho=1.1668665727582666 tau=3 mono_ratio=2.7877223491668701
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.88268922028361774 e1=1.0341934281648484 rho=1.1716393541782593 tau=3 mono_ratio=1.801572322845459
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.0601820929533576 e1=1.2506181519331654 rho=1.1796258020824353 tau=3 mono_ratio=2.235689640045166
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.91874250054947926 e1=1.1873556222542818 rho=1.292370409828413 tau=3 mono_ratio=2.9325706958770752
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.93738080182127914 e1=0.8249779421286213 rho=1.1362495332498037 tau=3 mono_ratio=1.4062321186065674
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.84965170143054147 e1=0.87562888845235776 rho=1.0305739245240197 tau=3 mono_ratio=2.1707038879394531
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.9103422904662628 e1=1.0068939308312022 rho=1.1060608095109219 tau=3 mono_ratio=2.2001132965087891
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.2560089211253656 e1=1.330087523070083 rho=1.0589793596524495 tau=3 mono_ratio=1.8115352392196655
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.85016051477837451 e1=0.88255297036030589 rho=1.0381015760915151 tau=3 mono_ratio=2.0029287338256836
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.93771442594303567 e1=1.0273468296631281 rho=1.0955860346654744 tau=3 mono_ratio=1.5493755340576172
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.72868786777451955 e1=0.90616590258304142 rho=1.2435583772061389 tau=3 mono_ratio=1.7172648906707764
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.68795258158334682 e1=0.758894864184539 rho=1.103120890010755 tau=3 mono_ratio=1.0410943031311035
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=1.2096294912885459 e1=1.3909530743429797 rho=1.1499001009899159 tau=3 mono_ratio=1.5281407833099365
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.1583754206437995 e1=1.2235552484154486 rho=1.0562683103886608 tau=3 mono_ratio=1.9814198017120361
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.67320976049370163 e1=0.63758310646878102 rho=1.0558776630177031 tau=3 mono_ratio=1.2124395370483398
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.93946404228315727 e1=1.1385578824909373 rho=1.211922788989352 tau=3 mono_ratio=2.8519065380096436
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.95665566862189311 e1=1.0438478323025555 rho=1.0911426822099159 tau=3 mono_ratio=2.3164024353027344
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.88297324028018431 e1=0.88363382556954939 rho=1.0007481373822917 tau=3 mono_ratio=1.2738137245178223
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.92004505651892021 e1=0.95610941617866241 rho=1.0391984711672673 tau=3 mono_ratio=1.6085042953491211
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.67699076343730191 e1=0.75775386266063982 rho=1.1192971949779347 tau=3 mono_ratio=1.6014761924743652
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.2072009441894636 e1=1.6413169650274133 rho=1.3596054348431756 tau=3 mono_ratio=2.8488750457763672
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.76898658606306214 e1=1.1156742660892736 rho=1.4508370963273782 tau=3 mono_ratio=2.0261476039886475
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.94046915667564968 e1=1.256998762720541 rho=1.3365656422239172 tau=3 mono_ratio=2.9720187187194824
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.58053973846179763 e1=0.78417850151141566 rho=1.3507748896542482 tau=3 mono_ratio=1.2046515941619873
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.88299492978163563 e1=1.0754597425441257 rho=1.2179681967054086 tau=3 mono_ratio=1.2017010450363159
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.2474571520151185 e1=1.4172905457112006 rho=1.1361436689713893 tau=3 mono_ratio=2.3044369220733643
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.61294318657612235 e1=0.64054598126513096 rho=1.0450332025030959 tau=3 mono_ratio=2.6741571426391602
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.93494193087601773 e1=1.1701893118181501 rho=1.2516171036099475 tau=3 mono_ratio=2.6862311363220215
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.74257125669930857 e1=0.62034209638005278 rho=1.1970350889218664 tau=3 mono_ratio=1.4300057888031006
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.84640222060358361 e1=0.87344223366357354 rho=1.0319470015198686 tau=3 mono_ratio=2.7316386699676514
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.94923084653840806 e1=1.0755208693384588 rho=1.1330445835463021 tau=3 mono_ratio=2.4145479202270508
+[TagStereo] fail tag_id=80 dir=L2R reason=stereo_ratio_weak e0=1.1051977010591889 e1=1.3435888625014238 rho=1.2157000154796449 tau=3 mono_ratio=2.6107275485992432
+[TagStereo] fail tag_id=80 dir=R2L reason=stereo_ratio_weak e0=1.1873145436062797 e1=1.2227333954956217 rho=1.0298310603961203 tau=3 mono_ratio=2.2040994167327881
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.64907591358939765 e1=0.84786924529600738 rho=1.3062713116267231 tau=3 mono_ratio=2.4929275512695312
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=1.0345240635944839 e1=1.2325889467592941 rho=1.1914550757622524 tau=3 mono_ratio=2.6770589351654053
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.0459297498388835 e1=1.3500342491722681 rho=1.2907504056457699 tau=3 mono_ratio=2.4157423973083496
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.63927654004695489 e1=0.6995404604478821 rho=1.0942689376685588 tau=3 mono_ratio=1.1686532497406006
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.71996326129808252 e1=0.96843072870519342 rho=1.3451113138940127 tau=3 mono_ratio=1.4048393964767456
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=1.1367219385879896 e1=1.1558081895201004 rho=1.0167906066271832 tau=3 mono_ratio=2.2406990528106689
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.81797221118266505 e1=0.87533763007283671 rho=1.070131256338279 tau=3 mono_ratio=2.6617517471313477
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.84563078643887557 e1=0.837556181823498 rho=1.0096406722091851 tau=3 mono_ratio=1.6306662559509277
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.2716773656639855 e1=1.3886237964408792 rho=1.0919623434705623 tau=3 mono_ratio=2.4507443904876709
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.77517550001129931 e1=0.73546042956772117 rho=1.0540002817186522 tau=3 mono_ratio=2.0814352035522461
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.7295923722482881 e1=0.75604642481639972 rho=1.0362586747588012 tau=3 mono_ratio=1.9993642568588257
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.0519436964303228 e1=1.1708011791120549 rho=1.1129884450775036 tau=3 mono_ratio=2.7388780117034912
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.299116883096866 e1=1.3177560425324502 rho=1.014347561534882 tau=3 mono_ratio=2.6819033622741699
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.94726654702810265 e1=1.2731296292709942 rho=1.3440035784238675 tau=3 mono_ratio=1.7976193428039551
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.96345192261678159 e1=1.3492575347828444 rho=1.4004409589196267 tau=3 mono_ratio=2.4429435729980469
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=1.3763793693041693 e1=1.8157283395973605 rho=1.319206302980332 tau=3 mono_ratio=2.0092811584472656
+[TagStereo] fail tag_id=115 dir=R2L reason=stereo_ratio_weak e0=1.4691605877998628 e1=1.7151445964011833 rho=1.1674316684483494 tau=3 mono_ratio=2.7394108772277832
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=1.4982509623417453 e1=1.8130031142699072 rho=1.2100797260467826 tau=3 mono_ratio=1.2685104608535767
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.87742400991302405 e1=1.0053647209250816 rho=1.1458140071627694 tau=3 mono_ratio=1.8577190637588501
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.0212367133773634 e1=1.076468425636584 rho=1.0540831635620296 tau=3 mono_ratio=1.7305268049240112
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.81407261514997686 e1=0.94102317456231221 rho=1.1559450064942944 tau=3 mono_ratio=1.8126808404922485
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.94754208332350154 e1=1.016886429640844 rho=1.0731833946635214 tau=3 mono_ratio=1.8046804666519165
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.0521021805945736 e1=1.0307083859237476 rho=1.0207563991350435 tau=3 mono_ratio=1.0016220808029175
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=1.0348522925081454 e1=0.94389255853994602 rho=1.0963666182648302 tau=3 mono_ratio=2.2306926250457764
+[TagStereo] fail tag_id=81 dir=L2R reason=stereo_ratio_weak e0=0.99055525713620685 e1=1.3621946007931049 rho=1.375182848815685 tau=3 mono_ratio=2.4153852462768555
+[TagStereo] fail tag_id=81 dir=R2L reason=stereo_ratio_weak e0=0.95502647773295968 e1=1.0659850897398222 rho=1.1161838069181833 tau=3 mono_ratio=2.8884940147399902
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.78358168477302581 e1=0.63849420370136545 rho=1.2272338260916875 tau=3 mono_ratio=1.0728350877761841
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.89850479216049284 e1=1.1406401105959254 rho=1.2694869524109282 tau=3 mono_ratio=2.4939389228820801
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=1.0012585128594906 e1=1.0173445172779627 rho=1.0160657854048765 tau=3 mono_ratio=2.6954693794250488
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.74997796050952226 e1=0.7984203927208765 rho=1.0645918076230554 tau=3 mono_ratio=1.3086534738540649
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.0164297250491783 e1=1.0842724001027579 rho=1.0667460556444777 tau=3 mono_ratio=1.9669299125671387
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.88050882157509336 e1=0.80274000870683815 rho=1.0968792036373727 tau=3 mono_ratio=1.4148024320602417
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=0.88316177775054017 e1=0.90938418609190286 rho=1.0296915117618213 tau=3 mono_ratio=1.424258828163147
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.63938896116019506 e1=0.75260136521307097 rho=1.1770634320467221 tau=3 mono_ratio=1.9542843103408813
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.86424191145089335 e1=0.98577807244972537 rho=1.1406274785426329 tau=3 mono_ratio=2.4874954223632812
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.7440363551694682 e1=0.74871771782799101 rho=1.0062918466546769 tau=3 mono_ratio=1.2690447568893433
+[TagStereo] fail tag_id=89 dir=R2L reason=stereo_ratio_weak e0=0.93906705413961089 e1=1.0474843868017338 rho=1.1154521735894618 tau=3 mono_ratio=2.1267962455749512
+[TagStereo] fail tag_id=91 dir=L2R reason=stereo_ratio_weak e0=0.87010843560765549 e1=1.1072387541282085 rho=1.2725296164752378 tau=3 mono_ratio=2.6181166172027588
+[TagStereo] fail tag_id=91 dir=R2L reason=stereo_ratio_weak e0=0.90159904457797169 e1=0.90701663583603165 rho=1.0060088697793452 tau=3 mono_ratio=2.9575676918029785
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.70869727177779507 e1=0.72651797289441777 rho=1.0251457170799785 tau=3 mono_ratio=2.3533625602722168
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.72915939240791072 e1=0.86198641337720761 rho=1.1821645886621528 tau=3 mono_ratio=2.8022503852844238
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.72270007802019531 e1=1.0311488982288561 rho=1.4268005901242493 tau=3 mono_ratio=2.7658548355102539
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.75886868149823172 e1=0.72605289047587529 rho=1.0451975212930431 tau=3 mono_ratio=1.8176290988922119
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.779130755357757 e1=0.76700740454083771 rho=1.0158060414141252 tau=3 mono_ratio=2.1859889030456543
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=1.172744773361361 e1=1.2630977743620024 rho=1.0770440448560896 tau=3 mono_ratio=1.8063080310821533
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.76606296309633126 e1=0.68953766520632376 rho=1.1109805912576638 tau=3 mono_ratio=1.1523391008377075
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.7638894936693037 e1=0.84237234514348047 rho=1.1027411059084571 tau=3 mono_ratio=2.9906506538391113
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.72773337269585769 e1=0.78940969407095951 rho=1.0847512613883203 tau=3 mono_ratio=2.7203378677368164
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=0.95906045084727132 e1=0.94272203621671458 rho=1.0173311050188178 tau=3 mono_ratio=1.4505366086959839
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.86788405912349442 e1=0.96907640118439353 rho=1.1165966132002703 tau=3 mono_ratio=2.7866096496582031
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=0.96246887248160751 e1=0.9403419116958317 rho=1.0235307609785689 tau=3 mono_ratio=1.2351258993148804
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.94506438524119663 e1=1.0091618532151088 rho=1.0678233873872309 tau=3 mono_ratio=1.1171984672546387
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.9641199040013374 e1=1.225794962045915 rho=1.2714133964947179 tau=3 mono_ratio=2.943906307220459
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.97285109581143481 e1=1.2394757225773041 rho=1.2740651962461103 tau=3 mono_ratio=2.74165940284729
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.96974941875114351 e1=0.9350527236856313 rho=1.0371066723292821 tau=3 mono_ratio=2.5985660552978516
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.84106946783307923 e1=0.84893190909138538 rho=1.0093481472692318 tau=3 mono_ratio=2.8293600082397461
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.75240145657842827 e1=0.93483845348562689 rho=1.242472944555908 tau=3 mono_ratio=2.0359792709350586
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=0.99178338908628894 e1=1.226732524796583 rho=1.2368956145654473 tau=3 mono_ratio=2.3007333278656006
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.1243436390778876 e1=0.91880376159615362 rho=1.2237037829503057 tau=3 mono_ratio=1.8956701755523682
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.86202362246692843 e1=0.92440505280915786 rho=1.0723662654294099 tau=3 mono_ratio=1.5513368844985962
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.72821765081905054 e1=0.77198857486159733 rho=1.0601069253583859 tau=3 mono_ratio=1.413311243057251
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.83017732662080201 e1=0.91057646378123946 rho=1.0968457394408164 tau=3 mono_ratio=2.0192978382110596
+[TagStereo] fail tag_id=103 dir=L2R reason=stereo_ratio_weak e0=1.3045458590050685 e1=0.93884853750127728 rho=1.389516845909532 tau=3 mono_ratio=1.2764813899993896
+[TagStereo] fail tag_id=103 dir=R2L reason=stereo_ratio_weak e0=0.92954771140201242 e1=1.0286335002064502 rho=1.106595699696139 tau=3 mono_ratio=2.3088622093200684
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.68431075172661437 e1=0.70532883914698108 rho=1.0307142439843606 tau=3 mono_ratio=1.2539609670639038
+[TagStereo] fail tag_id=93 dir=L2R reason=stereo_ratio_weak e0=1.0778415364677725 e1=1.5070565017689586 rho=1.3982171315363874 tau=3 mono_ratio=1.7478219270706177
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.025846544899873 e1=1.2552345120716073 rho=1.2236084608254103 tau=3 mono_ratio=2.4910130500793457
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.2977141340917004 e1=1.3383737345748317 rho=1.0313317081040025 tau=3 mono_ratio=2.0798714160919189
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.7727975609200608 e1=0.79142856033365205 rho=1.0241085121533011 tau=3 mono_ratio=1.2514307498931885
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=1.0696043471848486 e1=1.1912850923179978 rho=1.1137623882509875 tau=3 mono_ratio=1.3874363899230957
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.1650975660626024 e1=1.1547546552305583 rho=1.0089568037472187 tau=3 mono_ratio=1.0381439924240112
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.74259985014253094 e1=0.82746313122259008 rho=1.1142786131043418 tau=3 mono_ratio=1.8525741100311279
+[TagStereo] fail tag_id=90 dir=R2L reason=stereo_ratio_weak e0=1.040362646662361 e1=1.0777100807122728 rho=1.0358984764916632 tau=3 mono_ratio=1.799832820892334
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.69794744050941759 e1=0.75815986093339327 rho=1.0862707087137637 tau=3 mono_ratio=1.6492968797683716
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.8192912119091964 e1=1.0016395685766863 rho=1.2225684271896373 tau=3 mono_ratio=1.776795506477356
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=3 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=2.4910130500793457 cand0_valid=1 cand1_valid=1 left_idx=2 right_idx=2
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=3 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.0798714160919189 cand0_valid=1 cand1_valid=1 left_idx=2 right_idx=2
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=3 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.862155556678772 cand0_valid=1 cand1_valid=1 left_idx=9 right_idx=-1
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.93273422517306193 e1=1.1414002892149993 rho=1.223714385284304 tau=3 mono_ratio=2.2202363014221191
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=1.2743055853313732 e1=1.1888710211378608 rho=1.0718619283359112 tau=3 mono_ratio=1.365744948387146
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.95075114242380598 e1=1.0267665273990607 rho=1.0799529777071961 tau=3 mono_ratio=1.5822502374649048
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.96183044371497861 e1=1.0622944221815493 rho=1.10445081980779 tau=3 mono_ratio=1.3193405866622925
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.99878992491960361 e1=0.96903919294006702 rho=1.0307012679833636 tau=3 mono_ratio=2.5411276817321777
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.1747892943633875 e1=1.2205779087218007 rho=1.0389760227975604 tau=3 mono_ratio=1.491607666015625
+[TagLM] InitializeMapTagPose fail tag_id=79 kf_id=4 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.7857234477996826 cand0_valid=1 cand1_valid=1 left_idx=-1 right_idx=9
+[TagLM] InitializeMapTagPose ok tag_id=89 kf_id=4 cam=right selected=0 reproj_err=0.033001270145177841 t_w=[0.010983482003211975, -0.26515156030654907, 0.74987715482711792]
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.2436987774756509 e1=1.500322739778557 rho=1.2063393216623073 tau=3 mono_ratio=1.8130658864974976
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.66438023113325284 e1=0.79200172572912819 rho=1.1920910472999724 tau=3 mono_ratio=2.7706611156463623
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0080858605088665 e1=1.1358680630486409 rho=1.126757260883031 tau=3 mono_ratio=2.0000417232513428
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.88844424682109435 e1=0.89821792775277964 rho=1.011000893928522 tau=3 mono_ratio=1.8406481742858887
+[TagLM] InitializeMapTagPose ok tag_id=79 kf_id=5 cam=left selected=0 reproj_err=0.058843936771154404 t_w=[0.07957904040813446, -0.18420317769050598, 0.76786500215530396]
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.2041607722645085 e1=1.4396352428512624 rho=1.1955506904185038 tau=3 mono_ratio=1.0888354778289795
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.2973783748439289 e1=0.85147674366888837 rho=1.5236803400290602 tau=3 mono_ratio=1.0811699628829956
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0288799389695253 e1=1.1180408870378353 rho=1.0866582626452517 tau=3 mono_ratio=1.8421745300292969
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=1.6186250840958396 e1=1.6471613438332475 rho=1.017629937902339 tau=3 mono_ratio=1.1828141212463379
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.94686557737565369 e1=1.1431586182425209 rho=1.2073082445383723 tau=3 mono_ratio=1.1672002077102661
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.98880545677452669 e1=0.9895430262700412 rho=1.000745919725377 tau=3 mono_ratio=1.0035132169723511
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.1164243060128707 e1=1.1217825808169053 rho=1.0047994967239393 tau=3 mono_ratio=1.9742116928100586
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=11 reason=ambiguity_unresolved cam=left selected=-1 ambiguity_ratio=1.1672002077102661 cand0_valid=1 cand1_valid=1 left_idx=0 right_idx=1
+[TagLM] InitializeMapTagPose fail tag_id=113 kf_id=11 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=1.0035132169723511 cand0_valid=1 cand1_valid=1 left_idx=0 right_idx=1
+[TagLM] InitializeMapTagPose ok tag_id=115 kf_id=11 cam=left selected=0 reproj_err=0.034698262810707092 t_w=[0.34345144033432007, -0.40398937463760376, 0.72995901107788086]
+[TagLM] InitializeMapTagPose fail tag_id=114 kf_id=11 reason=ambiguity_unresolved cam=right selected=-1 ambiguity_ratio=2.285740852355957 cand0_valid=1 cand1_valid=1 left_idx=-1 right_idx=0
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.97727895801858311 e1=1.1245536509486855 rho=1.1506987248328777 tau=3 mono_ratio=2.871006965637207
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.2009602661955381 e1=1.1987124763641832 rho=1.0018751701294522 tau=3 mono_ratio=1.1957477331161499
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.59809446507262021 e1=0.73952388736801733 rho=1.2364666960122397 tau=3 mono_ratio=1.6652723550796509
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.79527207799069743 e1=0.85200699267410074 rho=1.0713402572304653 tau=3 mono_ratio=1.2748657464981079
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.3453896209723115 e1=1.5074486264083971 rho=1.1204550732289065 tau=3 mono_ratio=2.2876331806182861
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.92065457676863283 e1=0.91437878982947751 rho=1.0068634432492274 tau=3 mono_ratio=1.9944895505905151
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.1087937995881856 e1=1.3108851755254158 rho=1.1822623609818401 tau=3 mono_ratio=1.5310244560241699
+[TagLM] InitializeMapTagPose ok tag_id=114 kf_id=13 cam=right selected=0 reproj_err=0.02320512942969799 t_w=[0.26626545190811157, -0.41161191463470459, 0.73720049858093262]
+[TagLM] InitializeMapTagPose ok tag_id=113 kf_id=13 cam=left selected=0 reproj_err=0.030496958643198013 t_w=[0.17860376834869385, -0.41209560632705688, 0.72112917900085449]
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.165776223727274 e1=1.323427494009241 rho=1.1352328748331169 tau=3 mono_ratio=2.7229669094085693
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.9664089126772365 e1=0.96879978863740757 rho=1.0024739796232567 tau=3 mono_ratio=1.0811623334884644
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.87992139864910746 e1=1.1668325204735517 rho=1.3260644893269535 tau=3 mono_ratio=2.4117424488067627
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=1.1603932353869963 e1=1.4003426156907364 rho=1.206782815324611 tau=3 mono_ratio=2.5199124813079834
+[TagStereo] fail tag_id=77 dir=R2L reason=stereo_ratio_weak e0=0.94868956423440787 e1=1.1659150081432461 rho=1.2289742101834598 tau=3 mono_ratio=2.5838024616241455
+[TagStereo] fail tag_id=78 dir=L2R reason=stereo_ratio_weak e0=0.87121173364745252 e1=1.2511760619503898 rho=1.4361331616552375 tau=3 mono_ratio=2.251103401184082
+[TagStereo] fail tag_id=78 dir=R2L reason=stereo_ratio_weak e0=0.69199586846648209 e1=0.9899339149826587 rho=1.4305488799317287 tau=3 mono_ratio=1.8736166954040527
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.2261449969735023 e1=1.4536399123893662 rho=1.1855367153084289 tau=3 mono_ratio=1.4490646123886108
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=0.88655755739821596 e1=0.92199767193016402 rho=1.0399749730812506 tau=3 mono_ratio=2.9499039649963379
+[TagStereo] fail tag_id=90 dir=L2R reason=stereo_ratio_weak e0=0.87081265000132579 e1=1.3260040753340487 rho=1.5227202714720667 tau=3 mono_ratio=1.0032627582550049
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.96902943893698323 e1=1.4321889542422417 rho=1.4779622746398482 tau=3 mono_ratio=2.6342089176177979
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=0.52156432582331791 e1=0.93727947698707703 rho=1.7970544183796995 tau=3 mono_ratio=2.9360790252685547
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.2011356115197696 e1=1.6191321302912689 rho=1.3480011036344319 tau=3 mono_ratio=2.3659369945526123
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.2816788799054395 e1=1.4203808151968711 rho=1.108218944197197 tau=3 mono_ratio=1.7679636478424072
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=0.76045957199330716 e1=0.79141031704893905 rho=1.0407000531715369 tau=3 mono_ratio=2.6390023231506348
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.90405016549647088 e1=1.1515781802881191 rho=1.2737989814778874 tau=3 mono_ratio=2.8775153160095215
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.57320489190422208 e1=0.64477743478347715 rho=1.1248638030925082 tau=3 mono_ratio=1.9624866247177124
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=0.65130543454055334 e1=0.89023941474316204 rho=1.3668539630784819 tau=3 mono_ratio=2.3817019462585449
+[TagStereo] fail tag_id=115 dir=R2L reason=stereo_ratio_weak e0=0.78391949017337925 e1=0.88421741762537376 rho=1.1279441684781526 tau=3 mono_ratio=2.8521819114685059
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.1777199272842038 e1=1.2464754036925649 rho=1.0583801587772481 tau=3 mono_ratio=2.9867844581604004
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=0.85086834023121494 e1=0.84973849005396351 rho=1.0013296445778865 tau=3 mono_ratio=1.4957447052001953
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.89393335462265811 e1=1.1227822185254503 rho=1.2560021532515593 tau=3 mono_ratio=2.9387741088867188
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.5212901459478444 e1=0.63917078646102921 rho=1.2261324930144495 tau=3 mono_ratio=2.950361967086792
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=0.95590624272357427 e1=1.117629694347819 rho=1.1691833824562941 tau=3 mono_ratio=2.6124367713928223
+[TagStereo] fail tag_id=88 dir=R2L reason=stereo_ratio_weak e0=0.73696225646732305 e1=0.83190191871681718 rho=1.1288256776890691 tau=3 mono_ratio=1.5575120449066162
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=2.2749989995940547 e1=2.2366482233831504 rho=1.01714653909042 tau=3 mono_ratio=1.3263670206069946
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.94091398534490822 e1=1.1100523806350513 rho=1.1797596780840525 tau=3 mono_ratio=2.2530434131622314
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.65599271538765713 e1=0.69010415936603486 rho=1.0519997297625781 tau=3 mono_ratio=1.1665130853652954
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0362853861797345 e1=1.1658707938410418 rho=1.1250479928255823 tau=3 mono_ratio=1.9625704288482666
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.69228605970918888 e1=0.72972367288630624 rho=1.0540782420763546 tau=3 mono_ratio=2.181027889251709
+[TagStereo] fail tag_id=114 dir=L2R reason=stereo_ratio_weak e0=1.0834091227547566 e1=1.0318719275685588 rho=1.0499453408502852 tau=3 mono_ratio=2.5717692375183105
+[TagStereo] fail tag_id=114 dir=R2L reason=stereo_ratio_weak e0=1.1787417634698163 e1=1.1959220418650371 rho=1.0145750994094525 tau=3 mono_ratio=1.2148289680480957
+[TagStereo] fail tag_id=103 dir=L2R reason=stereo_ratio_weak e0=0.97264530065750976 e1=1.0539259253206277 rho=1.0835665627794693 tau=3 mono_ratio=2.0973303318023682
+[TagStereo] fail tag_id=103 dir=R2L reason=stereo_ratio_weak e0=1.3522184683633782 e1=1.3014331967770958 rho=1.0390225727090916 tau=3 mono_ratio=1.8424382209777832
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.86001357183863292 e1=0.96988737873370223 rho=1.127758224248032 tau=3 mono_ratio=2.3628861904144287
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.60006085209040816 e1=0.62564267763498194 rho=1.042632052087423 tau=3 mono_ratio=1.9206341505050659
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.0054236481567733 e1=1.2677412920862341 rho=1.2609025997642493 tau=3 mono_ratio=2.647444486618042
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.61290126139075574 e1=0.74458372987440458 rho=1.2148510315837702 tau=3 mono_ratio=2.2393054962158203
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=1.2645539912651405 e1=0.98941360236144815 rho=1.2780842995981927 tau=3 mono_ratio=1.0255943536758423
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0477025055401494 e1=1.2662899600995916 rho=1.2086350401902619 tau=3 mono_ratio=2.6213276386260986
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=0.72564509025199309 e1=1.100107939259809 rho=1.5160413176112524 tau=3 mono_ratio=1.6429848670959473
+[TagStereo] fail tag_id=89 dir=L2R reason=stereo_ratio_weak e0=1.3431784691297313 e1=1.7974027177990399 rho=1.3381711803535961 tau=3 mono_ratio=2.9093692302703857
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.84360126360899401 e1=1.3592354058196805 rho=1.611229693271834 tau=3 mono_ratio=2.1744112968444824
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=1.7794381639016941 e1=1.845633610772629 rho=1.0372001950821326 tau=3 mono_ratio=2.083270788192749
+[TagStereo] fail tag_id=79 dir=R2L reason=stereo_ratio_weak e0=1.4797048253482858 e1=1.4864438043171346 rho=1.0045542724797889 tau=3 mono_ratio=1.3596204519271851
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.99966371193686532 e1=1.0102543471917562 rho=1.0105941979466047 tau=3 mono_ratio=1.8449636697769165
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=1.1361822961616583 e1=1.1574416127760474 rho=1.0187111845233796 tau=3 mono_ratio=1.1491180658340454
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.1320600759303476 e1=1.3371142869160721 rho=1.181133682888758 tau=3 mono_ratio=2.2859675884246826
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.98223859586923357 e1=1.0217058321099479 rho=1.0401809055014857 tau=3 mono_ratio=1.4619147777557373
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.3189094123218732 e1=1.5412422210825361 rho=1.1685732215684805 tau=3 mono_ratio=2.5724797248840332
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.6991699513647085 e1=0.7827055101944731 rho=1.1194781877385227 tau=3 mono_ratio=2.0609712600708008
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.6910458966128058 e1=1.0487377030205427 rho=1.5176093333935865 tau=3 mono_ratio=1.0286303758621216
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.43173711743841847 e1=0.6978283352176643 rho=1.6163269415928159 tau=3 mono_ratio=2.4632127285003662
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.2351854382033005 e1=1.0081064305374339 rho=1.2252530095652252 tau=3 mono_ratio=1.604576587677002
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.60434721840926386 e1=0.70519781578623941 rho=1.1668752567035137 tau=3 mono_ratio=2.0033385753631592
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=0.81351834211187846 e1=0.98542232449188627 rho=1.2113092886417767 tau=3 mono_ratio=2.3723299503326416
+[TagStereo] fail tag_id=115 dir=R2L reason=stereo_ratio_weak e0=0.81948162909555033 e1=0.90241555995075151 rho=1.1012029163430195 tau=3 mono_ratio=2.6576449871063232
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.93671839450470717 e1=1.1907336187964772 rho=1.2711756548294388 tau=3 mono_ratio=2.1673481464385986
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=0.5306879502299453 e1=0.94273584357990181 rho=1.7764410184836052 tau=3 mono_ratio=1.344984769821167
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.92911035494376903 e1=1.0003498482086015 rho=1.0766749534208659 tau=3 mono_ratio=1.9221904277801514
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.93703519565078419 e1=0.91283055355084819 rho=1.0265160297048181 tau=3 mono_ratio=1.3593212366104126
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.0207528444571163 e1=1.4423146596321463 rho=1.4129910752159061 tau=3 mono_ratio=2.4606201648712158
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.81451632702004328 e1=1.0111579097955308 rho=1.2414212901704393 tau=3 mono_ratio=2.0649299621582031
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=0.59759200023869252 e1=0.91149638007503475 rho=1.5252820974606074 tau=3 mono_ratio=2.7207028865814209
+[TagStereo] fail tag_id=114 dir=L2R reason=stereo_ratio_weak e0=1.1543555023205385 e1=1.1935085152654494 rho=1.0339176387449847 tau=3 mono_ratio=2.5855634212493896
+[TagStereo] fail tag_id=114 dir=R2L reason=stereo_ratio_weak e0=1.4098859015832224 e1=1.4169276322069055 rho=1.0049945393529938 tau=3 mono_ratio=1.7896467447280884
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.1358260070903228 e1=1.2180588503866407 rho=1.0723991550735636 tau=3 mono_ratio=2.0686855316162109
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.75381043986860308 e1=0.97775662236629779 rho=1.2970855408153346 tau=3 mono_ratio=2.0046694278717041
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.0145537089348191 e1=1.2315807627507773 rho=1.2139138142128536 tau=3 mono_ratio=2.7166297435760498
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.82470647885697623 e1=1.1513259056648386 rho=1.396043240577552 tau=3 mono_ratio=2.1944329738616943
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.84690962675687809 e1=0.91501444977632174 rho=1.0804156911048772 tau=3 mono_ratio=2.1436572074890137
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.0025267609966138 e1=1.1546486010924866 rho=1.151738433189464 tau=3 mono_ratio=2.4521489143371582
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.62213587497305267 e1=0.81594515755674868 rho=1.3115224343565917 tau=3 mono_ratio=1.8980429172515869
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.6225808281761428 e1=0.95940683802806537 rho=1.5410157108397351 tau=3 mono_ratio=1.5345815420150757
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.6400818019554334 e1=0.54567109752558907 rho=1.1730176010511522 tau=3 mono_ratio=1.2715680599212646
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.85526257447905829 e1=1.0011333127757243 rho=1.1705566716922688 tau=3 mono_ratio=2.6158177852630615
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=1.023517743958124 e1=0.49066159398657405 rho=2.0859952264780994 tau=3 mono_ratio=1.4712367057800293
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.4006879934681935 e1=0.55470060901048457 rho=1.3843704270368811 tau=3 mono_ratio=1.9435704946517944
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.66929389805870321 e1=0.90898680036534341 rho=1.3581280251377534 tau=3 mono_ratio=2.8666152954101562
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.51268409957999173 e1=0.72566804280534858 rho=1.4154291950626348 tau=3 mono_ratio=1.3922717571258545
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.88299951580824765 e1=0.71078940469515117 rho=1.2422800758329751 tau=3 mono_ratio=1.2345641851425171
+[TagStereo] fail tag_id=114 dir=L2R reason=stereo_ratio_weak e0=0.71389279522640614 e1=1.0533339943285462 rho=1.4754792328713859 tau=3 mono_ratio=1.6701246500015259
+[TagStereo] fail tag_id=114 dir=R2L reason=stereo_ratio_weak e0=0.76632169456119303 e1=1.0015027576311393 rho=1.3068959999856438 tau=3 mono_ratio=1.5623297691345215
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.71912954697874687 e1=1.0040491236217097 rho=1.3962006253863226 tau=3 mono_ratio=2.4470598697662354
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.44560490772990841 e1=0.50017005165573247 rho=1.1224518465951128 tau=3 mono_ratio=1.3102281093597412
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.56122629446158634 e1=0.82191777814311962 rho=1.4645033309907991 tau=3 mono_ratio=2.4403321743011475
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.6846367741283258 e1=0.84237064212827906 rho=1.2303905862643563 tau=3 mono_ratio=1.7602497339248657
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.55466753832861393 e1=0.48809358152355758 rho=1.1363958863397741 tau=3 mono_ratio=1.2148566246032715
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.64847310774824718 e1=0.75169996109908666 rho=1.1591844780581559 tau=3 mono_ratio=2.7998933792114258
+[TagStereo] fail tag_id=79 dir=L2R reason=stereo_ratio_weak e0=0.35187444992608291 e1=0.89412413706986305 rho=2.5410317109317169 tau=3 mono_ratio=1.4974304437637329
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.209174912568352 e1=1.0088890667225592 rho=1.1985211776532707 tau=3 mono_ratio=1.4048479795455933
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.2509496565995557 e1=1.4549274792030626 rho=1.1630583783802455 tau=3 mono_ratio=1.3561866283416748
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.3517293376170216 e1=1.2937125568857184 rho=1.0448451863419479 tau=3 mono_ratio=1.0719754695892334
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.1022928043569036 e1=1.3078294748680657 rho=1.1864628613307631 tau=3 mono_ratio=1.9008036851882935
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.1525556255138143 e1=1.2605709747136156 rho=1.0937181223317785 tau=3 mono_ratio=1.9044953584671021
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=1.526178241379883 e1=1.6496657972526569 rho=1.0809129316902137 tau=3 mono_ratio=2.2815968990325928
+[TagStereo] fail tag_id=88 dir=L2R reason=stereo_ratio_weak e0=1.121311185427641 e1=1.4302811015672705 rho=1.2755434172773836 tau=3 mono_ratio=2.1535136699676514
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=1.0738268581989059 e1=1.1655617170445127 rho=1.0854279794361288 tau=3 mono_ratio=1.7884312868118286
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=1.4061490874127252 e1=1.4892263885606605 rho=1.0590814315726036 tau=3 mono_ratio=2.5077304840087891
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0564425050183248 e1=1.2640653082800339 rho=1.1965301491363012 tau=3 mono_ratio=2.9574549198150635
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=1.1769984478572897 e1=1.3927946484767335 rho=1.183344507232744 tau=3 mono_ratio=2.5351746082305908
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.9948551960086699 e1=1.0814495805200053 rho=1.08704219947959 tau=3 mono_ratio=1.5000679492950439
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=1.031227024354805 e1=0.99882380381241709 rho=1.0324413779349937 tau=3 mono_ratio=2.9061839580535889
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=1.0747424238836216 e1=1.2539785692612884 rho=1.1667712572126994 tau=3 mono_ratio=2.5301711559295654
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.58206460970615381 e1=0.66935040115823197 rho=1.1499589390019505 tau=3 mono_ratio=1.7921433448791504
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.72981805043077097 e1=0.8435838228222815 rho=1.1558823766670043 tau=3 mono_ratio=2.051508903503418
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.51511853682320474 e1=0.62097873671079751 rho=1.2055064846529078 tau=3 mono_ratio=1.910312294960022
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.93360804948744225 e1=1.0046759273172987 rho=1.0761217491566741 tau=3 mono_ratio=1.3448532819747925
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=1.0388333282837867 e1=1.4680161550274828 rho=1.4131392540510728 tau=3 mono_ratio=2.7209634780883789
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.66098596219544203 e1=0.97269785974235412 rho=1.4715862588669593 tau=3 mono_ratio=2.9838814735412598
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.2261480356342347 e1=1.7015718855361734 rho=1.3877377247261047 tau=3 mono_ratio=2.8098764419555664
+[TagStereo] fail tag_id=82 dir=R2L reason=stereo_ratio_weak e0=1.1188909612490607 e1=1.5257603156163562 rho=1.363636286371869 tau=3 mono_ratio=2.2593157291412354
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.47543830524356745 e1=0.6944430062122392 rho=1.460637475131159 tau=3 mono_ratio=1.7580490112304688
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.46481640111937511 e1=0.60482988011236516 rho=1.3012231891012991 tau=3 mono_ratio=2.5005505084991455
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.73633222297837908 e1=0.90701725732316185 rho=1.2318043795809683 tau=3 mono_ratio=1.5730329751968384
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.32375648167112314 e1=0.39095929673505009 rho=1.2075721063852569 tau=3 mono_ratio=1.1155036687850952
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.24836132285846568 e1=0.42966302401016965 rho=1.729991684434018 tau=3 mono_ratio=1.7614094018936157
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.84421889787451321 e1=0.65670753837132023 rho=1.2855325213453488 tau=3 mono_ratio=1.2123186588287354
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=0.89630746628226809 e1=0.9808484962837416 rho=1.0943214612032788 tau=3 mono_ratio=2.512972354888916
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=0.59895422355738048 e1=0.86829156255827633 rho=1.4496793376821622 tau=3 mono_ratio=1.8427721261978149
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.41620964529181137 e1=0.68228064270305955 rho=1.639271578114029 tau=3 mono_ratio=1.9021533727645874
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.78162357626076084 e1=0.37168599266263391 rho=2.1029137244547678 tau=3 mono_ratio=1.1111043691635132
+[TagStereo] fail tag_id=77 dir=L2R reason=stereo_ratio_weak e0=0.4126704499365475 e1=0.90326200746716456 rho=2.1888216285348978 tau=3 mono_ratio=1.6863455772399902
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.0268019682621317 e1=1.2677941349507427 rho=1.234701698967124 tau=3 mono_ratio=1.8115007877349854
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.2033664320146937 e1=1.0878096533303658 rho=1.1062288592717651 tau=3 mono_ratio=1.345363974571228
+[TagStereo] fail tag_id=115 dir=L2R reason=stereo_ratio_weak e0=0.74040941644852143 e1=1.1927138476259693 rho=1.6108842223213558 tau=3 mono_ratio=2.4544446468353271
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=0.50891320773331006 e1=0.85963320034175117 rho=1.6891548236316889 tau=3 mono_ratio=2.705155611038208
+[TagStereo] fail tag_id=102 dir=R2L reason=stereo_ratio_weak e0=0.64501366849064257 e1=0.91413342231823091 rho=1.4172310860328095 tau=3 mono_ratio=2.3319087028503418
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.7336066101543316 e1=1.0079651765333335 rho=1.3739859513360959 tau=3 mono_ratio=2.1717016696929932
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.0741794731534915 e1=0.97809352870424549 rho=1.0982379921052134 tau=3 mono_ratio=2.0486195087432861
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.40261331991405175 e1=0.65022842546976134 rho=1.6150196545746418 tau=3 mono_ratio=2.6921279430389404
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.56980142240312215 e1=0.74735756331163916 rho=1.3116105604792425 tau=3 mono_ratio=2.8554000854492188
+[TagStereo] fail tag_id=100 dir=L2R reason=stereo_ratio_weak e0=0.27521310636899071 e1=0.69587870825479803 rho=2.5285086015972404 tau=3 mono_ratio=1.8187294006347656
+[TagStereo] fail tag_id=100 dir=R2L reason=stereo_ratio_weak e0=0.42326371166696886 e1=0.86775828548467593 rho=2.0501598897220914 tau=3 mono_ratio=1.7488120794296265
+[TagStereo] fail tag_id=82 dir=L2R reason=stereo_ratio_weak e0=1.162312607314743 e1=1.7480181547488103 rho=1.5039139584687908 tau=3 mono_ratio=2.7496058940887451
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.9691080960078019 e1=1.2891669808849728 rho=1.3302612844381119 tau=3 mono_ratio=1.3589637279510498
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.1310142129432215 e1=0.99523805603942972 rho=1.1364258088237602 tau=3 mono_ratio=1.3789145946502686
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.65593948571286775 e1=0.89678273254054341 rho=1.3671729659615732 tau=3 mono_ratio=2.0458362102508545
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.41067253467994713 e1=0.57501149263551177 rho=1.4001703149772846 tau=3 mono_ratio=1.1954340934753418
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.48873259134923197 e1=0.75073174577387936 rho=1.5360787443400776 tau=3 mono_ratio=2.0026240348815918
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=0.68379954965508172 e1=0.98516055797536672 rho=1.4407154231551929 tau=3 mono_ratio=1.2546769380569458
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.089170850387724 e1=0.98424974673666188 rho=1.1066000818311961 tau=3 mono_ratio=1.1149654388427734
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=0.77065206119945651 e1=1.0665241905901763 rho=1.3839243984455125 tau=3 mono_ratio=2.2102327346801758
+[TagStereo] fail tag_id=112 dir=R2L reason=stereo_ratio_weak e0=0.95511396125467807 e1=1.1260212410847095 rho=1.1789391492367898 tau=3 mono_ratio=2.3114285469055176
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.49075420132053782 e1=0.74228382876570376 rho=1.5125368794720548 tau=3 mono_ratio=1.0939257144927979
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.7388594306608085 e1=0.96719507427270457 rho=1.3090380034787443 tau=3 mono_ratio=1.1556007862091064
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.1087301380251158 e1=1.4894809428524425 rho=1.3434116124615438 tau=3 mono_ratio=1.948392391204834
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.54623834477395561 e1=0.74570043152087406 rho=1.3651557754780179 tau=3 mono_ratio=2.7333610057830811
+[TagStereo] fail tag_id=110 dir=L2R reason=stereo_ratio_weak e0=0.72541555522694534 e1=1.0413070600888834 rho=1.4354628214825764 tau=3 mono_ratio=2.6809334754943848
+[TagStereo] fail tag_id=110 dir=R2L reason=stereo_ratio_weak e0=1.1316138720082376 e1=1.4122810529609806 rho=1.2480238071018239 tau=3 mono_ratio=1.5835933685302734
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.75034899317180714 e1=1.0349253728772119 rho=1.3792586941753739 tau=3 mono_ratio=1.5516492128372192
+[TagStereo] fail tag_id=102 dir=L2R reason=stereo_ratio_weak e0=1.1472249860597097 e1=1.7475907692534578 rho=1.5233200025850735 tau=3 mono_ratio=2.945549488067627
+[TagStereo] fail tag_id=101 dir=L2R reason=stereo_ratio_weak e0=0.99178163243754802 e1=1.3232202950607377 rho=1.3341851184261322 tau=3 mono_ratio=1.2143253087997437
+[TagStereo] fail tag_id=101 dir=R2L reason=stereo_ratio_weak e0=1.1242106955010585 e1=1.3667406947122602 rho=1.2157335808723764 tau=3 mono_ratio=1.9107170104980469
+[TagStereo] fail tag_id=113 dir=L2R reason=stereo_ratio_weak e0=1.2315355144923903 e1=1.5432881757633883 rho=1.2531414298241765 tau=3 mono_ratio=1.7961412668228149
+[TagStereo] fail tag_id=113 dir=R2L reason=stereo_ratio_weak e0=1.3929375154695822 e1=1.2055126210923166 rho=1.1554731911906211 tau=3 mono_ratio=2.2668592929840088
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.5352539677338024 e1=1.0185268761030957 rho=1.902885240650386 tau=3 mono_ratio=1.6056265830993652
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=1.1686539159289082 e1=1.5327704992744093 rho=1.3115692148641906 tau=3 mono_ratio=1.6454348564147949
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=0.59022216088981239 e1=0.90008553842968475 rho=1.5249944809726075 tau=3 mono_ratio=1.6690267324447632
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.93850198772317694 e1=1.1846727789436542 rho=1.2623018322586512 tau=3 mono_ratio=1.244752049446106
+[TagStereo] fail tag_id=112 dir=L2R reason=stereo_ratio_weak e0=1.2163331846646042 e1=1.6725132564485641 rho=1.3750453224169028 tau=3 mono_ratio=2.9805397987365723
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.0013463811287395 e1=1.3642358682783453 rho=1.3624015561709497 tau=3 mono_ratio=1.8726192712783813
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.98991919073281776 e1=1.3287331908773115 rho=1.3422643009389605 tau=3 mono_ratio=1.7965675592422485
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=0.86092207491060946 e1=1.338218948888277 rho=1.5544019456962164 tau=3 mono_ratio=2.3906786441802979
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=0.76009132238388732 e1=1.3336052113128782 rho=1.7545328716235529 tau=3 mono_ratio=1.903685450553894
+[TagStereo] fail tag_id=111 dir=L2R reason=stereo_ratio_weak e0=1.158251810467841 e1=1.8044698229819371 rho=1.5579253199657426 tau=3 mono_ratio=2.0245382785797119
+[TagStereo] fail tag_id=111 dir=R2L reason=stereo_ratio_weak e0=0.87289277605957505 e1=1.5476731668370463 rho=1.7730392649719651 tau=3 mono_ratio=2.4862856864929199

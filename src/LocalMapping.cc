@@ -23,9 +23,21 @@
 #include "Optimizer.h"
 #include "Converter.h"
 #include "GeometricTools.h"
+#include "Map.h"
+#include "CameraModels/GeometricCamera.h"
+#include "ua_tag/AprilTagDetector.h"
+#include "ua_tag/MapTagData.h"
+#include "ua_tag/TagObservation.h"
 
-#include<mutex>
-#include<chrono>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 namespace ORB_SLAM3
 {
@@ -333,8 +345,550 @@ void LocalMapping::ProcessNewKeyFrame()
     // Update links in the Covisibility Graph
     mpCurrentKeyFrame->UpdateConnections();
 
-    // Insert Keyframe in Map
+    // Insert Keyframe in Map（须先于 MapTag 关联，供 CheckMapTagAssociations 等使用）
     mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
+
+    // 建立 KF ↔ MapTag 双向关联，并扩展 Tag 地图（新 ID → CANDIDATE）
+    ProcessTagObservations(mpCurrentKeyFrame);
+}
+
+bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
+                                        int leftIndex, int rightIndex) const
+{
+    if(!pTag || !pKF)
+        return false;
+
+    const int tag_id = pTag->Id();
+    const int n_left = static_cast<int>(pKF->mTagFrameData.left.size());
+    const int n_right = static_cast<int>(pKF->mTagFrameData.right.size());
+
+    const tag::TagObservation *obs_left =
+        (leftIndex >= 0 && leftIndex < n_left)
+            ? &pKF->mTagFrameData.left[leftIndex]
+            : nullptr;
+    const tag::TagObservation *obs_right =
+        (rightIndex >= 0 && rightIndex < n_right)
+            ? &pKF->mTagFrameData.right[rightIndex]
+            : nullptr;
+
+    if(!obs_left && !obs_right)
+    {
+        std::cout << "[TagLM] InitializeMapTagPose fail"
+                  << " tag_id=" << tag_id
+                  << " kf_id=" << pKF->mnId
+                  << " reason=no_valid_obs_index"
+                  << " left_idx=" << leftIndex << "/" << n_left
+                  << " right_idx=" << rightIndex << "/" << n_right
+                  << std::endl;
+        return false;
+    }
+
+    // 左目优先；失败且右目可用时回退右目
+    auto trySetPoseFromObs = [&](const tag::TagObservation *obs,
+                                 const char *cam_src) -> bool {
+        if(!obs)
+            return false;
+
+        if(!obs->pose_estimate.has_value())
+        {
+            std::cout << "[TagLM] InitializeMapTagPose fail"
+                      << " tag_id=" << tag_id
+                      << " kf_id=" << pKF->mnId
+                      << " reason=no_pose_estimate"
+                      << " cam=" << cam_src
+                      << " left_idx=" << leftIndex
+                      << " right_idx=" << rightIndex
+                      << " outlier=" << (obs->is_outlier ? 1 : 0)
+                      << std::endl;
+            return false;
+        }
+
+        if(!obs->IsAmbiguityResolved())
+        {
+            const tag::TagPoseEstimate &est = *obs->pose_estimate;
+            std::cout << "[TagLM] InitializeMapTagPose fail"
+                      << " tag_id=" << tag_id
+                      << " kf_id=" << pKF->mnId
+                      << " reason=ambiguity_unresolved"
+                      << " cam=" << cam_src
+                      << " selected=" << est.selected_candidate
+                      << " ambiguity_ratio=" << est.ambiguity_ratio
+                      << " cand0_valid=" << (est.candidates[0].valid ? 1 : 0)
+                      << " cand1_valid=" << (est.candidates[1].valid ? 1 : 0)
+                      << " left_idx=" << leftIndex
+                      << " right_idx=" << rightIndex
+                      << std::endl;
+            return false;
+        }
+
+        const tag::TagPoseCandidate *sel = obs->pose_estimate->Selected();
+        if(!sel)
+        {
+            std::cout << "[TagLM] InitializeMapTagPose fail"
+                      << " tag_id=" << tag_id
+                      << " kf_id=" << pKF->mnId
+                      << " reason=no_selected_candidate"
+                      << " cam=" << cam_src
+                      << std::endl;
+            return false;
+        }
+
+        // 若为右目，则需要将 Tag 坐标系转换到左目
+        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
+            obs->camera_id, sel->T_ct, pKF->GetRelativePoseTlr());
+        // T_wt = Twc * T_cL_t（左目锚定）
+        pTag->SetPose(pKF->GetPoseInverse() * T_cL_t);
+
+        const Eigen::Vector3f tw = pTag->GetPose().translation();
+        std::cout << "[TagLM] InitializeMapTagPose ok"
+                  << " tag_id=" << tag_id
+                  << " kf_id=" << pKF->mnId
+                  << " cam=" << cam_src
+                  << " selected=" << obs->pose_estimate->selected_candidate
+                  << " reproj_err=" << sel->reprojection_error
+                  << " t_w=[" << tw.x() << ", " << tw.y() << ", " << tw.z() << "]"
+                  << std::endl;
+        return true;
+    };
+
+    if(trySetPoseFromObs(obs_left, "left"))
+        return true;
+    if(trySetPoseFromObs(obs_right, "right"))
+        return true;
+
+    return false;
+}
+
+bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) const
+{
+    constexpr float kMinBaseline = 0.07f;
+    constexpr std::size_t kMinValidKFs = 7;
+    constexpr double kTauRho = 2.0;
+    constexpr double kErrorEps = 1e-9;
+
+    if(!pTag || pTag->IsBad() || pTag->HasPose())
+        return false;
+    if(pTag->GetState() != tag::MapTagState::CANDIDATE)
+        return false;
+
+    const int tag_id = pTag->Id();
+    const float tag_size = pTag->GetTagSize();
+    if(tag_id < 0 || tag_size <= 0.0f)
+        return false;
+
+    const auto observations = pTag->GetObservations();
+    if(observations.size() < kMinValidKFs)
+        return false;
+
+    // 按首次观测起的 KF id 排序
+    std::vector<KeyFrame *> ordered_kfs;
+    ordered_kfs.reserve(observations.size());
+    for(const auto &kv : observations)
+    {
+        KeyFrame *pKF = kv.first;
+        if(!pKF || pKF->isBad())
+            continue;
+        ordered_kfs.push_back(pKF);
+    }
+    std::sort(ordered_kfs.begin(), ordered_kfs.end(),
+              [](KeyFrame *a, KeyFrame *b) { return a->mnId < b->mnId; });
+    if(ordered_kfs.empty())
+        return false;
+
+    // 按照 Tag ID 从 KF 中挑选可测量的观测
+    auto pickMeasurableObs = [](KeyFrame *pKF, int tid) -> const tag::TagObservation * {
+        const tag::TagObservation *left =
+            pKF->mTagFrameData.Find(tid, tag::CameraId::LEFT_OR_MONO);
+        if(left && !left->is_outlier)
+            return left;
+        const tag::TagObservation *right =
+            pKF->mTagFrameData.Find(tid, tag::CameraId::RIGHT);
+        if(right && !right->is_outlier)
+            return right;
+        return nullptr;
+    };
+
+    auto hasTwoValidIppe = [](const tag::TagObservation *obs) -> bool {
+        if(!obs || !obs->pose_estimate.has_value())
+            return false;
+        const auto &est = *obs->pose_estimate;
+        return est.candidates[0].valid && est.candidates[1].valid;
+    };
+
+    // 从首帧起，相邻有效 KF 基线 > 0.07m；且该 KF 上需有可测量观测
+    std::vector<KeyFrame *> valid_kfs;
+    valid_kfs.reserve(ordered_kfs.size());
+    Eigen::Vector3f last_center = Eigen::Vector3f::Zero();
+    bool has_last = false;
+    for(KeyFrame *pKF : ordered_kfs)
+    {
+        if(!pickMeasurableObs(pKF, tag_id))
+            continue;
+        const Eigen::Vector3f center = pKF->GetCameraCenter();
+        if(!has_last)
+        {
+            valid_kfs.push_back(pKF);
+            last_center = center;
+            has_last = true;
+            continue;
+        }
+        if((center - last_center).norm() > kMinBaseline)
+        {
+            valid_kfs.push_back(pKF);
+            last_center = center;
+        }
+    }
+
+    if(valid_kfs.size() < kMinValidKFs)
+    {
+        std::cout << "[TagLM] multi-frame disambiguate skip"
+                  << " tag_id=" << tag_id
+                  << " reason=insufficient_valid_kfs"
+                  << " n_valid=" << valid_kfs.size()
+                  << " need>=" << kMinValidKFs
+                  << std::endl;
+        return false;
+    }
+
+    std::vector<cv::Point3f> object_pts;
+    ua_tag::BuildSquareObjectPoints(static_cast<double>(tag_size), object_pts);
+
+    struct IppeHyp
+    {
+        KeyFrame *pKF = nullptr;
+        const tag::TagObservation *obs = nullptr;
+        int cand_idx = -1;
+    };
+
+    // 所有有效 KF 上的全部 IPPE 解（每观测 2 个候选；同 KF 左目优先，否则右目）
+    std::vector<IppeHyp> hyps;
+    hyps.reserve(valid_kfs.size() * 2);
+    for(KeyFrame *pKF : valid_kfs)
+    {
+        const tag::TagObservation *left =
+            pKF->mTagFrameData.Find(tag_id, tag::CameraId::LEFT_OR_MONO);
+        const tag::TagObservation *right =
+            pKF->mTagFrameData.Find(tag_id, tag::CameraId::RIGHT);
+        const tag::TagObservation *src = nullptr;
+        if(hasTwoValidIppe(left))
+            src = left;
+        else if(hasTwoValidIppe(right))
+            src = right;
+        if(!src)
+            continue;
+        hyps.push_back({pKF, src, 0});
+        hyps.push_back({pKF, src, 1});
+    }
+    if(hyps.size() < 2)
+        return false;
+
+    // 计算 Tag 世界坐标系下的四角点
+    auto computeWorldCorners =
+        [&](const IppeHyp &hyp,
+            std::array<Eigen::Vector3f, 4> &corners_w) -> bool {
+        const tag::TagPoseCandidate &cand =
+            hyp.obs->pose_estimate->candidates[hyp.cand_idx];
+        if(!cand.valid)
+            return false;
+        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
+            hyp.obs->camera_id, cand.T_ct, hyp.pKF->GetRelativePoseTlr());
+        const Sophus::SE3f T_wt = hyp.pKF->GetPoseInverse() * T_cL_t;
+        for(int k = 0; k < 4; ++k)
+        {
+            const Eigen::Vector3f P_t(object_pts[k].x, object_pts[k].y,
+                                     object_pts[k].z);
+            corners_w[k] = T_wt * P_t;
+        }
+        return true;
+    };
+
+
+    auto recomputeWorldPose = [&](const IppeHyp &hyp, Sophus::SE3f &T_wt) -> bool {
+        const tag::TagPoseCandidate &cand =
+            hyp.obs->pose_estimate->candidates[hyp.cand_idx];
+        if(!cand.valid)
+            return false;
+        const Sophus::SE3f T_cL_t = tag::ExpressTagPoseInLeftCamera(
+            hyp.obs->camera_id, cand.T_ct, hyp.pKF->GetRelativePoseTlr());
+        T_wt = hyp.pKF->GetPoseInverse() * T_cL_t;
+        return true;
+    };
+
+    // 多帧联合重投影误差评估（这里包含右目观测评估）
+    auto evalCrossReproj =
+        [&](const std::array<Eigen::Vector3f, 4> &corners_w,
+            KeyFrame *pExclude) -> double {
+        double sum = 0.0;
+        int n = 0;
+        for(KeyFrame *pKF : valid_kfs)
+        {
+            if(pKF == pExclude || !pKF || pKF->isBad())
+                continue;
+
+            // 收集指定KF上指定Tag的观测
+            const tag::TagObservation *obs = pickMeasurableObs(pKF, tag_id);
+            if(!obs)
+                continue;
+
+            GeometricCamera *cam = nullptr;
+            Sophus::SE3f T_cam_w;
+            const Sophus::SE3f Tcw = pKF->GetPose();  // left <- world
+            if(obs->camera_id == tag::CameraId::RIGHT)
+            {
+                if(!pKF->mpCamera2)
+                    continue;
+                cam = pKF->mpCamera2;
+                // P_left = T_lr * P_right => P_right = T_rl * Tcw * P_w
+                T_cam_w = pKF->GetRelativePoseTlr().inverse() * Tcw;
+            }
+            else
+            {
+                if(!pKF->mpCamera)
+                    continue;
+                cam = pKF->mpCamera;
+                T_cam_w = Tcw;
+            }
+
+            double sum_sq = 0.0;
+            bool ok = true;
+            for(int k = 0; k < 4; ++k)
+            {
+                const Eigen::Vector3f P_c = T_cam_w * corners_w[k];
+                if(P_c.z() <= 0.0f)
+                {
+                    ok = false;
+                    break;
+                }
+                const cv::Point2f uv =
+                    cam->project(cv::Point3f(P_c.x(), P_c.y(), P_c.z()));
+                const double dx =
+                    static_cast<double>(uv.x - obs->corners_raw[k].x);
+                const double dy =
+                    static_cast<double>(uv.y - obs->corners_raw[k].y);
+                sum_sq += dx * dx + dy * dy;
+            }
+            if(!ok)
+                continue;
+            sum += std::sqrt(sum_sq / 4.0);
+            ++n;
+        }
+        if(n <= 0)
+            return std::numeric_limits<double>::infinity();
+        return sum / static_cast<double>(n);
+    };
+
+    double best_err = std::numeric_limits<double>::infinity();
+    int best_hyp_idx = -1;
+
+    // 遍历所有候选IPPE解，选择重投影误差最小的
+    for(std::size_t i = 0; i < hyps.size(); ++i)
+    {
+        // 计算候选IPPE解对应 Tag 世界坐标系下的四角点
+        std::array<Eigen::Vector3f, 4> corners_w{};
+        if(!computeWorldCorners(hyps[i], corners_w))
+            continue;
+        // 评估重投影误差
+        const double err = evalCrossReproj(corners_w, hyps[i].pKF);
+        if(err < best_err)
+        {
+            best_err = err;
+            best_hyp_idx = static_cast<int>(i);
+        }
+    }
+
+    if(best_hyp_idx < 0 || !std::isfinite(best_err))
+    {
+        std::cout << "[TagLM] multi-frame disambiguate fail"
+                  << " tag_id=" << tag_id
+                  << " reason=no_valid_hypothesis"
+                  << " n_valid_kfs=" << valid_kfs.size()
+                  << " n_hyps=" << hyps.size()
+                  << std::endl;
+        return false;
+    }
+
+    // 选择重投影误差最小的IPPE解，并计算镜像解的重投影误差，区分度需要较大
+    const IppeHyp &best = hyps[best_hyp_idx];
+    const int mirror_idx = 1 - best.cand_idx;
+    IppeHyp mirror = best;
+    mirror.cand_idx = mirror_idx;
+
+    std::array<Eigen::Vector3f, 4> mirror_corners{};
+    if(!computeWorldCorners(mirror, mirror_corners))
+    {
+        std::cout << "[TagLM] multi-frame disambiguate fail"
+                  << " tag_id=" << tag_id
+                  << " reason=mirror_invalid"
+                  << " kf_id=" << best.pKF->mnId
+                  << " best_cand=" << best.cand_idx
+                  << std::endl;
+        return false;
+    }
+    const double mirror_err = evalCrossReproj(mirror_corners, mirror.pKF);
+    const double rho =
+        (mirror_err + kErrorEps) / (best_err + kErrorEps);
+
+    std::cout << "[TagLM] multi-frame disambiguate"
+              << " tag_id=" << tag_id
+              << " n_valid_kfs=" << valid_kfs.size()
+              << " best_kf_id=" << best.pKF->mnId
+              << " best_cand=" << best.cand_idx
+              << " e_best=" << best_err
+              << " e_mirror=" << mirror_err
+              << " ratio=" << rho
+              << " tau=" << kTauRho
+              << std::endl;
+
+    if(!(rho > kTauRho) || !std::isfinite(rho) || !std::isfinite(mirror_err))
+    {
+        std::cout << "[TagLM] multi-frame disambiguate reject"
+                  << " tag_id=" << tag_id
+                  << " reason=ratio_weak"
+                  << " ratio=" << rho
+                  << std::endl;
+        return false;
+    }
+
+    Sophus::SE3f T_wt;
+    if(!recomputeWorldPose(best, T_wt))
+        return false;
+
+    // 回写选中 IPPE 到源观测，切换 Tag 状态为 ACTIVE
+    pTag->SetPose(T_wt);
+    pTag->SetState(tag::MapTagState::ACTIVE);
+
+    const Sophus::SE3f T_ct_sel =
+        best.obs->pose_estimate->candidates[best.cand_idx].T_ct;
+    best.pKF->mTagFrameData.WriteBackSelectedCandidate(
+        tag_id, best.obs->camera_id, best.cand_idx, &T_ct_sel);
+
+    const Eigen::Vector3f tw = T_wt.translation();
+    std::cout << "[TagLM] multi-frame disambiguate ok"
+              << " tag_id=" << tag_id
+              << " state=ACTIVE"
+              << " ratio=" << rho
+              << " e_best=" << best_err
+              << " e_mirror=" << mirror_err
+              << " t_w=[" << tw.x() << ", " << tw.y() << ", " << tw.z() << "]"
+              << std::endl;
+    return true;
+}
+
+void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
+{
+    if(!pKF)
+        return;
+
+    Map *pMap = pKF->GetMap();
+    if(!pMap || !pMap->IsTagInitialized())
+        return;
+
+    if(pKF->mTagFrameData.Empty())
+        return;
+
+    struct PendingObservation
+    {
+        int leftIndex = -1;
+        int rightIndex = -1;
+    };
+
+    // 按照 Tag ID 聚合当前KF中的观测，同时进行简单的有效性检查
+    std::unordered_map<int, PendingObservation> pending;
+
+    for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.left.size()); ++i)
+    {
+        const tag::TagObservation &obs = pKF->mTagFrameData.left[i];
+        if(obs.is_outlier || obs.tag_id < 0)
+            continue;
+        pending[obs.tag_id].leftIndex = i;
+    }
+    for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.right.size()); ++i)
+    {
+        const tag::TagObservation &obs = pKF->mTagFrameData.right[i];
+        if(obs.is_outlier || obs.tag_id < 0)
+            continue;
+        pending[obs.tag_id].rightIndex = i;
+    }
+
+    if(pending.empty())
+        return;
+
+    // 新建 Tag 时复用地图中已有 Tag 的物理尺寸
+    float tag_size = 0.16f;
+    {
+        const auto existing = pMap->GetAllMapTags();
+        for(const auto &t : existing)
+        {
+            if(t && t->GetTagSize() > 0.0f)
+            {
+                tag_size = t->GetTagSize();
+                break;
+            }
+        }
+    }
+
+    bool tag_map_updated = false;
+
+    for(const auto &kv : pending)
+    {
+        const int tag_id = kv.first;
+        const int left_idx = kv.second.leftIndex;
+        const int right_idx = kv.second.rightIndex;
+
+        auto pTag = pMap->GetMapTag(tag_id);
+        bool created = false;
+        const bool had_pose_before = pTag && pTag->HasPose();
+
+        if(!pTag)
+        {
+            pTag = std::make_shared<tag::MapTagData>();
+            pTag->SetId(tag_id);
+            pTag->SetTagSize(tag_size);
+            pTag->SetState(tag::MapTagState::CANDIDATE);
+            InitializeMapTagPose(pTag.get(), pKF, left_idx, right_idx);
+
+            if(!pMap->AddMapTag(pTag))
+            {
+                // 同 ID 已存在（并发/竞态）：改用地图中的对象
+                pTag = pMap->GetMapTag(tag_id);
+            }
+            else
+            {
+                created = true;
+                tag_map_updated = true;
+                std::cout << "[TagLM] created MapTag id=" << tag_id
+                          << " as CANDIDATE from kf_id=" << pKF->mnId
+                          << " has_pose=" << (pTag->HasPose() ? 1 : 0)
+                          << std::endl;
+            }
+        }
+
+        if(!pTag)
+            continue;
+
+        if(!pKF->AddMapTag(pTag.get(), left_idx, right_idx))
+        {
+            if(created && pTag->Observations() == 0)
+                pMap->EraseMapTag(tag_id);
+            continue;
+        }
+
+        // 仍无 pose 的 CANDIDATE：先试当前帧单目消歧；失败则多帧联合消歧
+        if(pTag->GetState() == tag::MapTagState::CANDIDATE && !pTag->HasPose())
+        {
+            if(!created)
+                InitializeMapTagPose(pTag.get(), pKF, left_idx, right_idx);
+            if(!pTag->HasPose())
+                TryResolveMapTagAmbiguityMultiFrame(pTag.get());
+        }
+
+        if(pTag->HasPose() && (!had_pose_before || created))
+            tag_map_updated = true;
+    }
+
+    // MapTag 新增或首次获得 pose：在线覆盖写入 tag_map_corners.csv
+    if(tag_map_updated && mpTracker)
+        mpTracker->SaveTagMapOnline();
 }
 
 void LocalMapping::EmptyQueue()

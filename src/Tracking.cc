@@ -38,9 +38,12 @@
 #include "ua_tag/TagViewer.h"
 #endif
 
+#include <algorithm>
 #include <iostream>
 #include <cstdio>
 #include <iomanip>
+#include <unordered_map>
+#include <vector>
 
 #include <mutex>
 #include <chrono>
@@ -2013,6 +2016,34 @@ void Tracking::EstimateAndVisualizeTagPoses()
         for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
             mpAprilTagDetector->EstimatePose(obs, camera_right, nullptr);
         mpAprilTagDetector->SetGeometricCamera(mpCamera);
+
+        // 暂时屏蔽双目交叉重投影消歧（保留实现，不删除）
+        // 交叉重投影消歧：同 ID 左右观测成对，先 L→R 再必要时 R→L
+        std::unordered_map<int, tag::TagObservation *> right_by_id;
+        right_by_id.reserve(mCurrentFrame.mTagFrameData.right.size());
+        for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
+        {
+            if(obs.is_outlier || obs.tag_id < 0)
+                continue;
+            right_by_id.emplace(obs.tag_id, &obs);
+        }
+        
+        const double tag_size = mpAprilTagDetector->GetConfig().tag_size;
+        const Sophus::SE3f T_lr = mCurrentFrame.GetRelativePoseTlr();
+        for(tag::TagObservation &left_obs : mCurrentFrame.mTagFrameData.left)
+        {
+            if(left_obs.is_outlier || left_obs.tag_id < 0)
+                continue;
+            if(left_obs.IsAmbiguityResolved())
+                continue;
+        
+            auto it = right_by_id.find(left_obs.tag_id);
+            if(it == right_by_id.end())
+                continue;
+        
+            ua_tag::DisambiguateWithStereo(
+                left_obs, *it->second, T_lr, mpCamera, mpCamera2, tag_size, 3.0);
+        }
     }
 
     // 可视化：双目左右检测帧并排；单目仅左目
@@ -2050,9 +2081,9 @@ void Tracking::TagTrack()
 #ifdef HAS_APRILTAG
     // 暂时屏蔽 TagTrack：Tag 初始化前仅做 IPPE，供 MonocularInitialization 使用。
     // 初始化成功后的跟踪 / 每帧 Viewer 更新均关闭；Viewer 只在初始化处推送一次快照。
-    Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
-    if(pMap && pMap->IsTagInitialized())
-        return;
+    // Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+    // if(pMap && pMap->IsTagInitialized())
+    //     return;
 
     EstimateAndVisualizeTagPoses();
 #endif
@@ -3504,7 +3535,41 @@ bool Tracking::NeedNewKeyFrame()
     else
         c4=false;
 
-    if(((c1a||c1b||c1c) && c2)||c3 ||c4)
+    // Tag：当前帧观测到地图中尚不存在的 Tag ID → 强制关键帧
+    bool cTagNew = false;
+    Map *pMap = mpAtlas->GetCurrentMap();
+    if(pMap && pMap->IsTagInitialized())
+    {
+        std::vector<int> new_tag_ids;
+        auto collectNewTag = [&](const tag::TagObservation &obs) {
+            if(obs.is_outlier || pMap->HasMapTag(obs.tag_id))
+                return;
+            if(std::find(new_tag_ids.begin(), new_tag_ids.end(), obs.tag_id) ==
+               new_tag_ids.end())
+                new_tag_ids.push_back(obs.tag_id);
+        };
+        for(const tag::TagObservation &obs : mCurrentFrame.mTagFrameData.left)
+            collectNewTag(obs);
+        for(const tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
+            collectNewTag(obs);
+
+        if(!new_tag_ids.empty())
+        {
+            cTagNew = true;
+            std::cout << "[TagKF] new Tag observed, force keyframe"
+                      << " frame_id=" << mCurrentFrame.mnId
+                      << " new_tag_ids=[";
+            for(size_t i = 0; i < new_tag_ids.size(); ++i)
+            {
+                if(i)
+                    std::cout << ", ";
+                std::cout << new_tag_ids[i];
+            }
+            std::cout << "]" << std::endl;
+        }
+    }
+
+    if(((c1a||c1b||c1c) && c2)||c3 ||c4 || cTagNew)
     {
         // If the mapping accepts keyframes, insert keyframe.
         // Otherwise send a signal to interrupt BA
@@ -4397,6 +4462,13 @@ void Tracking::SaveTagExports()
     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
     if(mpTagTracker && pMap)
         mpTagTracker->SaveExports(*pMap);
+}
+
+void Tracking::SaveTagMapOnline()
+{
+    Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+    if(mpTagTracker && pMap)
+        mpTagTracker->SaveTagMapOnline(*pMap);
 }
 
 void Tracking::SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder)

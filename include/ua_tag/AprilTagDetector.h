@@ -78,6 +78,18 @@ inline void BuildSquareObjectPoints(double tag_size, std::vector<cv::Point3f> &o
     object_pts.emplace_back(-h, -h, 0.f);
 }
 
+// 交叉重投影消歧（约定 P_left = T_lr * P_right）：
+//   1) L→R：左目未消歧时，两候选经 T_rl 投到右目，写回 left
+//   2) 若左目仍失败，则 R→L：右目两候选经 T_lr 投到左目，写回 right
+// 任一侧成功即返回 true。
+bool DisambiguateWithStereo(tag::TagObservation &left_obs,
+                            tag::TagObservation &right_obs,
+                            const Sophus::SE3f &T_lr,
+                            GeometricCamera *cam_left,
+                            GeometricCamera *cam_right,
+                            double tag_size,
+                            double tau_rho = 3.0);
+
 class AprilTagDetector
 {
 public:

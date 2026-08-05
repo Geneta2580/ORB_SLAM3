@@ -84,7 +84,7 @@ void TagMapExporter::AppendCameraPose(unsigned long frame_id,
               << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
 }
 
-bool TagMapExporter::SaveTagMapCorners(Map &map) const
+bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
 {
     if(mOutputDir.empty())
         return false;
@@ -118,6 +118,7 @@ bool TagMapExporter::SaveTagMapCorners(Map &map) const
                   return a->Id() < b->Id();
               });
 
+    std::size_t n_with_corners = 0;
     for(const auto &map_tag : tags)
     {
         if(!map_tag)
@@ -132,6 +133,7 @@ bool TagMapExporter::SaveTagMapCorners(Map &map) const
             const auto c = map_tag->GetWorldCorners();
             for(int i = 0; i < 4; ++i)
                 ofs << "," << c[i].x() << "," << c[i].y() << "," << c[i].z();
+            ++n_with_corners;
         }
         else
         {
@@ -141,8 +143,12 @@ bool TagMapExporter::SaveTagMapCorners(Map &map) const
     }
 
     ofs.close();
-    std::cout << "[TagMapExporter] saved tag map corners -> " << path
-              << " num_tags=" << tags.size() << std::endl;
+    if(verbose)
+    {
+        std::cout << "[TagMapExporter] saved tag map corners -> " << path
+                  << " num_tags=" << tags.size()
+                  << " with_corners=" << n_with_corners << std::endl;
+    }
     return true;
 }
 
