@@ -573,6 +573,14 @@ Sophus::SE3f Frame::GetRelativePoseTlr() const
     return mTlr;
 }
 
+void Frame::SetRelativePoseTlr(const Sophus::SE3f &Tlr)
+{
+    mTlr = Tlr;
+    mTrl = mTlr.inverse();
+    mRlr = mTlr.rotationMatrix();
+    mtlr = mTlr.translation();
+}
+
 Eigen::Matrix3f Frame::GetRelativePoseTlr_rotation() const
 {
     return mTlr.rotationMatrix();

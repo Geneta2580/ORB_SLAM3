@@ -20,6 +20,8 @@ File.version: "1.0"
 Camera.type: "PinHole"
 
 # Camera calibration and distortion parameters (OpenCV) 
+# Tank short_test (from short_test.yaml): fx=fy=655, bf=78.89165891925023
+# baseline = bf/fx ≈ 0.120445 m
 Camera1.fx: 655.0
 Camera1.fy: 655.0
 Camera1.cx: 306.0
@@ -30,10 +32,11 @@ Camera1.k2: 0.0
 Camera1.p1: 0.0
 Camera1.p2: 0.0
 
-Camera2.fx: 457.587
-Camera2.fy: 456.134
-Camera2.cx: 379.999
-Camera2.cy: 255.238
+# 数据集仅给左目内参；右目暂复用左目
+Camera2.fx: 655.0
+Camera2.fy: 655.0
+Camera2.cx: 306.0
+Camera2.cy: 256.0
 
 Camera2.k1: 0.0
 Camera2.k2: 0.0
@@ -44,21 +47,22 @@ Camera.width: 612
 Camera.height: 512
 
 # Camera frames per second 
-Camera.fps: 15
+Camera.fps: 20
 
 # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
 Camera.RGB: 1
 
 # Close/Far threshold. Baseline times.
 Stereo.ThDepth: 60.0
+# T_c1_c2：左相机系下右相机位姿；旋转近似单位阵，平移 x = bf/fx
 Stereo.T_c1_c2: !!opencv-matrix
   rows: 4
   cols: 4
   dt: f
-  data: [0.999997256477797,-0.002317135723275,-0.000343393120620,0.110074137800478,
-         0.002312067192432,0.999898048507103,-0.014090668452683,-0.000156612054392,
-         0.000376008102320,0.014089835846691,0.999900662638081,0.000889382785432,
-         0,0,0,1.000000000000000]
+  data: [1.0, 0.0, 0.0, 0.12044528109809199,
+         0.0, 1.0, 0.0, 0.0,
+         0.0, 0.0, 1.0, 0.0,
+         0.0, 0.0, 0.0, 1.0]
 
 # Transformation from camera 0 to body-frame (imu)
 IMU.T_b_c1: !!opencv-matrix
@@ -115,7 +119,7 @@ Viewer.ViewpointZ: -1.8
 Viewer.ViewpointF: 500.0
 Viewer.imageViewScale: 1.0
 Viewer.showTagMap: 1
-Viewer.showTagKFs: 0
+Viewer.showTagKFs: 1
 
 # 跟踪 OK 后每帧 append 一行 TUM（Twc）；0=关闭
 System.saveOnlinePose: 1
@@ -134,5 +138,5 @@ Tag.clahe_tile_grid: 8
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"
-Tag.viewer: 1
+Tag.viewer: 0
 

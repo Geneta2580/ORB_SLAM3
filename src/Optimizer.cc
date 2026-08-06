@@ -239,7 +239,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
                 vpMapPointEdgeStereo.push_back(pMP);
             }
 
-            if(pKF->mpCamera2){
+            if(pKF->NLeft != -1){
                 int rightIndex = get<1>(mit->second);
 
                 if(rightIndex != -1 && rightIndex < pKF->mvKeysRight.size()){
@@ -691,7 +691,7 @@ void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const l
                     optimizer.addEdge(e);
                 }
 
-                if(pKFi->mpCamera2){ // Monocular right observation
+                if(pKFi->NLeft != -1){ // Fisheye dual-camera right observation
                     int rightIndex = get<1>(mit->second);
 
                     if(rightIndex != -1 && rightIndex < pKFi->mvKeysRight.size()){
@@ -873,8 +873,8 @@ int Optimizer::PoseOptimization(Frame *pFrame)
         MapPoint* pMP = pFrame->mvpMapPoints[i];
         if(pMP)
         {
-            //Conventional SLAM
-            if(!pFrame->mpCamera2){
+            // Conventional SLAM: Nleft==-1（PinHole/Rectified；mpCamera2 可能仅为 Tag 而存在）
+            if(pFrame->Nleft == -1){
                 // Monocular observation
                 if(pFrame->mvuRight[i]<0)
                 {
@@ -939,7 +939,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                     vnIndexEdgeStereo.push_back(i);
                 }
             }
-            //SLAM with respect a rigid body
+            //SLAM with respect a rigid body (KannalaBrandt dual-camera, Nleft>=0)
             else{
                 nInitialCorrespondences++;
 
@@ -1377,7 +1377,7 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                     nEdges++;
                 }
 
-                if(pKFi->mpCamera2){
+                if(pKFi->NLeft != -1){
                     int rightIndex = get<1>(mit->second);
 
                     if(rightIndex != -1 ){
@@ -2807,8 +2807,8 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int&
                     vpMapPointEdgeStereo.push_back(pMP);
                 }
 
-                // Monocular right observation
-                if(pKFi->mpCamera2){
+                // Fisheye dual-camera right observation
+                if(pKFi->NLeft != -1){
                     int rightIndex = get<1>(mit->second);
 
                     if(rightIndex != -1 ){

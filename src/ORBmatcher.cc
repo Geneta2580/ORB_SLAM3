@@ -925,7 +925,7 @@ namespace ORB_SLAM3
 
         GeometricCamera* pCamera1 = pKF1->mpCamera, *pCamera2 = pKF2->mpCamera;
 
-        if(!pKF1->mpCamera2 && !pKF2->mpCamera2){
+        if(pKF1->NLeft == -1 && pKF2->NLeft == -1){
             T12 = T1w * Tw2;
             R12 = T12.rotationMatrix();
             t12 = T12.translation();
@@ -976,7 +976,7 @@ namespace ORB_SLAM3
                         continue;
                     }
 
-                    const bool bStereo1 = (!pKF1->mpCamera2 && pKF1->mvuRight[idx1]>=0);
+                    const bool bStereo1 = (pKF1->NLeft == -1 && pKF1->mvuRight[idx1]>=0);
 
                     if(bOnlyStereo)
                         if(!bStereo1)
@@ -1004,7 +1004,7 @@ namespace ORB_SLAM3
                         if(vbMatched2[idx2] || pMP2)
                             continue;
 
-                        const bool bStereo2 = (!pKF2->mpCamera2 &&  pKF2->mvuRight[idx2]>=0);
+                        const bool bStereo2 = (pKF2->NLeft == -1 &&  pKF2->mvuRight[idx2]>=0);
 
                         if(bOnlyStereo)
                             if(!bStereo2)
@@ -1023,7 +1023,7 @@ namespace ORB_SLAM3
                         const bool bRight2 = (pKF2 -> NLeft == -1 || idx2 < pKF2 -> NLeft) ? false
                                                                                            : true;
 
-                        if(!bStereo1 && !bStereo2 && !pKF1->mpCamera2)
+                        if(!bStereo1 && !bStereo2 && pKF1->NLeft == -1)
                         {
                             const float distex = ep(0)-kp2.pt.x;
                             const float distey = ep(1)-kp2.pt.y;
@@ -1033,7 +1033,7 @@ namespace ORB_SLAM3
                             }
                         }
 
-                        if(pKF1->mpCamera2 && pKF2->mpCamera2){
+                        if(pKF1->NLeft != -1 && pKF2->NLeft != -1){
                             if(bRight1 && bRight2){
                                 R12 = Rrr;
                                 t12 = trr;

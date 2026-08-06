@@ -159,7 +159,8 @@ void MapPoint::AddObservation(KeyFrame* pKF, int idx)
 
     mObservations[pKF]=indexes;
 
-    if(!pKF->mpCamera2 && pKF->mvuRight[idx]>=0)
+    // NLeft==-1：经典双目用 mvuRight 表示立体观测（计 2）；勿用 !mpCamera2（Tag 会挂 Camera2）
+    if(pKF->NLeft == -1 && pKF->mvuRight[idx]>=0)
         nObs+=2;
     else
         nObs++;
@@ -176,7 +177,7 @@ void MapPoint::EraseObservation(KeyFrame* pKF)
             int leftIndex = get<0>(indexes), rightIndex = get<1>(indexes);
 
             if(leftIndex != -1){
-                if(!pKF->mpCamera2 && pKF->mvuRight[leftIndex]>=0)
+                if(pKF->NLeft == -1 && pKF->mvuRight[leftIndex]>=0)
                     nObs-=2;
                 else
                     nObs--;

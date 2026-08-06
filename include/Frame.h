@@ -109,6 +109,8 @@ public:
     Sophus::SE3f GetRelativePoseTlr() const;
     Eigen::Matrix3f GetRelativePoseTlr_rotation() const;
     Eigen::Vector3f GetRelativePoseTlr_translation() const;
+    // PinHole 双目 Frame 需显式写入左右外参（供 TagStereo / 右目投影）
+    void SetRelativePoseTlr(const Sophus::SE3f &Tlr);
 
     void SetNewBias(const IMU::Bias &b);
 

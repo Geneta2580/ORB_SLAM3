@@ -266,13 +266,10 @@ target_link_libraries(mono_euroc ${PROJECT_NAME})
 
 # TagFusion examples (per-dataset folders under Examples/TagFusion/)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/test)
-add_executable(mono_test_tag
-        Examples/TagFusion/test/mono_test_tag.cc)
-target_link_libraries(mono_test_tag ${PROJECT_NAME})
 
-add_executable(test_map_tag_associations
-        Examples/TagFusion/test/test_map_tag_associations.cc)
-target_link_libraries(test_map_tag_associations ${PROJECT_NAME})
+add_executable(stereo_test_tag
+        Examples/TagFusion/test/stereo_test_tag.cc)
+target_link_libraries(stereo_test_tag ${PROJECT_NAME})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/PennCOSYVIO)
 add_executable(mono_penncosyvio_tag

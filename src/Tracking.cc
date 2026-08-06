@@ -1658,12 +1658,18 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
         mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector);
     else if(mSensor == System::STEREO)
+    {
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,static_cast<Frame*>(NULL),IMU::Calib(),mpAprilTagDetector,mpCamera2);
+        mCurrentFrame.SetRelativePoseTlr(mTlr);
+    }
     else if(mSensor == System::IMU_STEREO &&
             mpCamera->GetType() == GeometricCamera::CAM_FISHEYE)
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,mpCamera2,mTlr,&mLastFrame,*mpImuCalib,mpAprilTagDetector);
     else if(mSensor == System::IMU_STEREO)
+    {
         mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib,mpAprilTagDetector,mpCamera2);
+        mCurrentFrame.SetRelativePoseTlr(mTlr);
+    }
 
     //cout << "Incoming frame ended" << endl;
 
@@ -2712,7 +2718,9 @@ void Tracking::StereoInitialization()
         }
 
         // 4) 依赖最终位姿创建双目 MapPoint
-        if(!mpCamera2){
+        // 不能用 !mpCamera2 判断——TagFusion 强制加载 Camera2，否则会误走鱼眼分支导致 0 点。
+        // PinHole/Rectified：Frame 走 ComputeStereoMatches，Nleft==-1，深度在 mvDepth。
+        if(mCurrentFrame.Nleft == -1){
             for(int i=0; i<mCurrentFrame.N;i++)
             {
                 float z = mCurrentFrame.mvDepth[i];
@@ -2730,6 +2738,7 @@ void Tracking::StereoInitialization()
                     mCurrentFrame.mvpMapPoints[i]=pNewMP;
                 }
             }
+        // KannalaBrandt 鱼眼双目：Nleft>=0，匹配在 mvLeftToRightMatch / mvStereo3Dpoints。
         } else{
             for(int i = 0; i < mCurrentFrame.Nleft; i++){
                 int rightIndex = mCurrentFrame.mvLeftToRightMatch[i];
