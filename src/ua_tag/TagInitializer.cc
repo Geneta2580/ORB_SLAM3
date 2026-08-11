@@ -19,7 +19,7 @@ namespace {
 void LogFrameTagAmbiguityRatios(const Frame &frame, const char *label)
 {
     auto log_obs = [&](const TagObservation &obs, const char *cam) {
-        if(obs.is_outlier || obs.tag_id < 0)
+        if(!obs.IsDetectValid())
             return;
 
         int selected = -1;
@@ -71,7 +71,7 @@ TagInitializer::TagInitializer(const std::string &settingsFile)
 
 bool TagInitializer::HasTwoValidIppeCandidates(const TagObservation &obs) noexcept
 {
-    if(obs.is_outlier || !obs.pose_estimate.has_value())
+    if(!obs.IsDetectValid() || !obs.pose_estimate.has_value())
         return false;
 
     const TagPoseEstimate &est = *obs.pose_estimate;
@@ -116,7 +116,7 @@ void TagInitializer::CollectUnambiguousObservation(UnambiguousObsMap &unambiguou
                                                    const TagObservation &obs)
 {
     // 无歧义且有效的 IPPE 解：已消歧选中，且候选 valid
-    if(obs.is_outlier || !obs.pose_estimate.has_value() ||
+    if(!obs.IsDetectValid() || !obs.pose_estimate.has_value() ||
        obs.pose_estimate->Selected() == nullptr)
         return;
 
@@ -464,7 +464,8 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
         map_tag->SetId(tag_id);
         map_tag->SetTagSize(static_cast<float>(mTagSize));
         map_tag->SetPose(T_wt);
-        map_tag->SetState(MapTagState::FIXED_ANCHOR);
+        // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
+        map_tag->SetState(MapTagState::ACTIVE);
         // 观测角点留在 Frame/KeyFrame::mTagFrameData；不向 MapTag 复制
 
         out.tags.emplace(tag_id, std::move(map_tag));
@@ -627,7 +628,8 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
         map_tag->SetId(tag_id);
         map_tag->SetTagSize(static_cast<float>(mTagSize));
         map_tag->SetPose(T_wt);
-        map_tag->SetState(MapTagState::FIXED_ANCHOR);
+        // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
+        map_tag->SetState(MapTagState::ACTIVE);
         out.tags.emplace(tag_id, std::move(map_tag));
     }
 
@@ -680,7 +682,7 @@ bool TagInitializer::TryInitialize(Frame &first_frame, Frame &second_frame,
         return false;
     }
 
-    // 1) 单帧建图 + motion-only 估计第二帧（内部再校验与 fixed_tags 共视）
+    // 1) 单帧建图 + motion-only 估计第二帧（内部用 Result::tags 世界角点作临时锚点）
     if(TryInitializeSingleFrame(first_frame, result))
     {
         if(CompleteSingleFrameInitWithSecondFrame(first_frame, second_frame, result))

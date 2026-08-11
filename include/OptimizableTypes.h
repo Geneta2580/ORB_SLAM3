@@ -20,6 +20,7 @@
 #define ORB_SLAM3_OPTIMIZABLETYPES_H
 
 #include "Thirdparty/g2o/g2o/core/base_unary_edge.h"
+#include "Thirdparty/g2o/g2o/core/base_binary_edge.h"
 #include <Thirdparty/g2o/g2o/types/types_six_dof_expmap.h>
 #include <Thirdparty/g2o/g2o/types/sim3.h>
 
@@ -213,6 +214,89 @@ public:
     // virtual void linearizeOplus();
 
 };
+
+// Tag 刚体位姿 + KF 位姿：e = u - π(T_cw * T_wt * P_t)
+// vertex 0: T_wt，vertex 1: T_cw
+class EdgeSE3ProjectTagCorner : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    EdgeSE3ProjectTagCorner();
+
+    bool read(std::istream &is);
+    bool write(std::ostream &os) const;
+
+    void computeError()
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+        const Eigen::Vector3d Xc = vCam->estimate().map(vTag->estimate().map(X_t));
+        _error = _measurement - pCamera->project(Xc);
+    }
+
+    bool isDepthPositive() const
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+        return vCam->estimate().map(vTag->estimate().map(X_t))(2) > 0.0;
+    }
+
+    virtual void linearizeOplus();
+
+    // 与解析 Jacobian 做中心差分对比；成功返回 true
+    bool checkJacobiansNumerical(double delta = 1e-8, double tol = 1e-5) const;
+
+    Eigen::Vector3d X_t;  // Tag 坐标系角点
+    GeometricCamera *pCamera = nullptr;
+};
+
+// 右目：e = u - π(T_rl * T_cw * T_wt * P_t)
+class EdgeSE3ProjectTagCornerToBody : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    EdgeSE3ProjectTagCornerToBody();
+
+    bool read(std::istream &is);
+    bool write(std::ostream &os) const;
+
+    void computeError()
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+        const Eigen::Vector3d Xr =
+            (mTrl * vCam->estimate()).map(vTag->estimate().map(X_t));
+        _error = _measurement - pCamera->project(Xr);
+    }
+
+    bool isDepthPositive() const
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+        return (mTrl * vCam->estimate()).map(vTag->estimate().map(X_t))(2) > 0.0;
+    }
+
+    virtual void linearizeOplus();
+
+    bool checkJacobiansNumerical(double delta = 1e-8, double tol = 1e-5) const;
+
+    Eigen::Vector3d X_t;
+    GeometricCamera *pCamera = nullptr;
+    g2o::SE3Quat mTrl;
+};
+
+// 合成场景下校验 Tag 角点边解析 Jacobian（供单测 / 调试调用）
+bool TestTagCornerEdgeJacobians(double *max_abs_err = nullptr);
 
 }
 

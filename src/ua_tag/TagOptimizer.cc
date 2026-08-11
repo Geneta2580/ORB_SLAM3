@@ -99,6 +99,8 @@ struct CornerMeas
     TagObservation *obs = nullptr;
 };
 
+// init 第二帧 motion-only：容器内 Tag 世界位姿在本优化中临时当作锚点使用，
+// 不要求 MapTagState::FIXED_ANCHOR（初始化 Tag 现为 ACTIVE）。
 const MapTagData *FindFixedTagWithCorners(
     const TagOptimizer::TagContainer &fixed_tags, int tag_id)
 {
@@ -106,7 +108,7 @@ const MapTagData *FindFixedTagWithCorners(
     if(it == fixed_tags.end() || !it->second)
         return nullptr;
     const MapTagData *map_tag = it->second.get();
-    if(!map_tag->IsFixed() || !map_tag->HasWorldCorners())
+    if(!map_tag->HasPose() || !map_tag->HasWorldCorners())
         return nullptr;
     return map_tag;
 }
@@ -155,7 +157,8 @@ void CollectFixedTagCornerMeasurements(Frame &frame,
         if(!map_tag)
             return;
 
-        obs.is_outlier = false;
+        if(!obs.IsDetectValid())
+            return;
         const auto &pw = map_tag->GetWorldCorners();
         // 鱼眼：原图像素 + Cal3Fisheye（与 ORB KB / BA 一致）
         // 针孔：去畸变像素 + Cal3_S2
@@ -260,7 +263,7 @@ std::optional<Sophus::SE3f> EstimateInitialTcwFromFixedTags(
     const Frame &frame, const TagOptimizer::TagContainer &fixed_tags)
 {
     auto try_obs = [&](const TagObservation &obs) -> std::optional<Sophus::SE3f> {
-        if(obs.is_outlier || !obs.pose_estimate.has_value())
+        if(!obs.IsDetectValid() || !obs.pose_estimate.has_value())
             return std::nullopt;
 
         const auto it = fixed_tags.find(obs.tag_id);
@@ -325,6 +328,9 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
                       << frame.mnId << std::endl;
         return false;
     }
+
+    // 同帧多次优化前清临时外点；检测外点保持不变
+    frame.mTagFrameData.ResetOptOutliers();
 
     std::vector<CornerMeas> meas;
     CollectFixedTagCornerMeasurements(frame, fixed_tags, meas);
@@ -405,9 +411,9 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
     }
 
     for(TagObservation &obs : frame.mTagFrameData.left)
-        obs.is_outlier = false;
+        obs.ResetOptOutliers();
     for(TagObservation &obs : frame.mTagFrameData.right)
-        obs.is_outlier = false;
+        obs.ResetOptOutliers();
 
     for(std::size_t i = 0; i < meas.size();)
     {
@@ -421,7 +427,7 @@ bool TagOptimizer::PoseOptimization(Frame &frame,
             ++j;
         }
         if(obs && n_bad >= 3)
-            obs->is_outlier = true;
+            obs->is_opt_outlier = true;
         i = j;
     }
 

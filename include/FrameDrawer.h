@@ -23,6 +23,7 @@
 #include "Tracking.h"
 #include "MapPoint.h"
 #include "Atlas.h"
+#include "ua_tag/TagFrameData.h"
 
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
@@ -83,6 +84,16 @@ protected:
 
     map<long unsigned int, cv::Point2f> mmProjectPoints;
     map<long unsigned int, cv::Point2f> mmMatchedInImage;
+
+    // Tag.detect 叠加到 ORB Current Frame 窗（Tag.show_in_orb_viewer）
+    bool mbDrawTags;
+    tag::TagFrameData mTagFrameData;
+
+    // true: 鱼眼双目（Nleft!=-1，左右特征拼在同一 Frame）；false: PinHole 经典双目
+    bool mbFisheyeStereo;
+
+    // PinHole 经典双目：左目特征对应的右目 u（与 Frame::mvuRight 一致）
+    std::vector<float> mvuRight;
 
 };
 

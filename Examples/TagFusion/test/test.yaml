@@ -139,4 +139,18 @@ Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"
 Tag.viewer: 0
+Tag.save_vis: 0                 # 1=每帧保存 Tag 检测图到 Tag.save_vis_dir
+Tag.save_vis_dir: "tag_vis"
+Tag.show_in_orb_viewer: 1       # 1=ORB Current Frame 叠加 Tag；双目并排左右
+# ORB+Tag 联合 PoseOptimization（仅 TrackLocalMap；默认关）
+Tag.pose_optimization: 1
+Tag.corner_sigma: 2.0           # Tag 角点像素 sigma，Ω=1/σ² I
+Tag.min_inlier_corners: 3       # 每相机每 Tag 至少 N 个角点内点才保留
+Tag.fixed_only: 0               # 1=仅 FIXED_ANCHOR参与优化
+# Tag 联合 Local BA（默认关，便于回归）
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1
 

@@ -38,7 +38,7 @@ public:
         bool verbose = false);
 
     // 单帧 Tag 初始化后估计第二帧位姿：复用 PoseOptimization(TagContainer)。
-    // fixed_tags：已 FIXED_ANCHOR 且可 GetWorldCorners（通常来自 Result::tags）。
+    // fixed_tags：本优化中临时固定世界位姿的 Tag（通常来自 Result::tags，状态可为 ACTIVE）。
     // 共视 Tag 门槛由 TagInitializer::TryInitialize 预先检查，此处不再重复判断。
     // 若未给 Tcw_pred 且 frame 无 Pose，则用共视 Tag 的 IPPE 估初值。
     // 成功则写入 Tcw_out（与 frame.GetPose() 一致）；失败不修改 Tcw_out。

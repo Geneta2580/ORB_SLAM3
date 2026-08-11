@@ -99,6 +99,7 @@ src/ua_tag/TagInitializer.cc
 src/ua_tag/TagTracker.cc
 src/ua_tag/TagOptimizer.cc
 src/ua_tag/TagMapExporter.cc
+src/ua_tag/TagPoseConstraints.cc
 include/System.h
 include/Tracking.h
 include/LocalMapping.h
@@ -133,7 +134,8 @@ include/ua_tag/TagObservation.h
 include/ua_tag/TagFrameData.h
 include/ua_tag/MapTagData.h
 include/ua_tag/TagOptimizer.h
-include/ua_tag/TagMapExporter.h)
+include/ua_tag/TagMapExporter.h
+include/ua_tag/TagPoseConstraints.h)
 
 add_subdirectory(Thirdparty/g2o)
 
@@ -271,10 +273,18 @@ add_executable(stereo_test_tag
         Examples/TagFusion/test/stereo_test_tag.cc)
 target_link_libraries(stereo_test_tag ${PROJECT_NAME})
 
+add_executable(test_tag_corner_jac
+        Examples/TagFusion/test/test_tag_corner_jac.cc)
+target_link_libraries(test_tag_corner_jac ${PROJECT_NAME})
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/PennCOSYVIO)
 add_executable(mono_penncosyvio_tag
         Examples/TagFusion/PennCOSYVIO/mono_penncosyvio_tag.cc)
 target_link_libraries(mono_penncosyvio_tag ${PROJECT_NAME})
+
+add_executable(stereo_penncosyvio_tag
+        Examples/TagFusion/PennCOSYVIO/stereo_penncosyvio_tag.cc)
+target_link_libraries(stereo_penncosyvio_tag ${PROJECT_NAME})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/TagFusion/XREAL_Glass)
 add_executable(mono_xreal_glass_tag

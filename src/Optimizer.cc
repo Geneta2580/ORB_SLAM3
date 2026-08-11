@@ -37,9 +37,19 @@
 #include "G2oTypes.h"
 #include "Converter.h"
 
-#include<mutex>
+#include <mutex>
+#include <unordered_map>
+#include <cstdint>
 
 #include "OptimizableTypes.h"
+#include "CameraModels/GeometricCamera.h"
+#include "ua_tag/MapTagData.h"
+#include "ua_tag/TagObservation.h"
+
+#include <iostream>
+#include <map>
+#include <set>
+#include <utility>
 
 
 namespace ORB_SLAM3
@@ -240,13 +250,15 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
             }
 
             if(pKF->NLeft != -1){
-                int rightIndex = get<1>(mit->second);
+                // get<1> 存的是组合特征全局索引 (= NLeft + rightLocalIndex)
+                const int rightGlobalIndex = get<1>(mit->second);
+                const int rightLocalIndex = rightGlobalIndex - pKF->NLeft;
 
-                if(rightIndex != -1 && rightIndex < pKF->mvKeysRight.size()){
-                    rightIndex -= pKF->NLeft;
-
+                if(rightGlobalIndex >= pKF->NLeft &&
+                   rightLocalIndex >= 0 &&
+                   rightLocalIndex < static_cast<int>(pKF->mvKeysRight.size())){
                     Eigen::Matrix<double,2,1> obs;
-                    cv::KeyPoint kp = pKF->mvKeysRight[rightIndex];
+                    cv::KeyPoint kp = pKF->mvKeysRight[rightLocalIndex];
                     obs << kp.pt.x, kp.pt.y;
 
                     ORB_SLAM3::EdgeSE3ProjectXYZToBody *e = new ORB_SLAM3::EdgeSE3ProjectXYZToBody();
@@ -692,13 +704,15 @@ void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const l
                 }
 
                 if(pKFi->NLeft != -1){ // Fisheye dual-camera right observation
-                    int rightIndex = get<1>(mit->second);
+                    // get<1> 存的是组合特征全局索引 (= NLeft + rightLocalIndex)
+                    const int rightGlobalIndex = get<1>(mit->second);
+                    const int rightLocalIndex = rightGlobalIndex - pKFi->NLeft;
 
-                    if(rightIndex != -1 && rightIndex < pKFi->mvKeysRight.size()){
-                        rightIndex -= pKFi->NLeft;
-
+                    if(rightGlobalIndex >= pKFi->NLeft &&
+                       rightLocalIndex >= 0 &&
+                       rightLocalIndex < static_cast<int>(pKFi->mvKeysRight.size())){
                         Eigen::Matrix<double,2,1> obs;
-                        kpUn = pKFi->mvKeysRight[rightIndex];
+                        kpUn = pKFi->mvKeysRight[rightLocalIndex];
                         obs << kpUn.pt.x, kpUn.pt.y;
 
                         EdgeMono *e = new EdgeMono(1);
@@ -826,6 +840,13 @@ void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const l
 
 int Optimizer::PoseOptimization(Frame *pFrame)
 {
+    return PoseOptimization(pFrame, {}, tag::TagPoseOptParams());
+}
+
+int Optimizer::PoseOptimization(Frame *pFrame,
+                                const std::vector<tag::TagPoseConstraint> &tagConstraints,
+                                const tag::TagPoseOptParams &tagParams)
+{
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
 
@@ -862,8 +883,23 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     vpEdgesStereo.reserve(N);
     vnIndexEdgeStereo.reserve(N);
 
+    // Tag 角点边：与 ORB feature index 解耦
+    struct TagCornerEdgeRecord
+    {
+        ORB_SLAM3::EdgeSE3ProjectXYZOnlyPose *leftEdge = nullptr;
+        ORB_SLAM3::EdgeSE3ProjectXYZOnlyPoseToBody *rightEdge = nullptr;
+        tag::TagObservation *observation = nullptr;
+        int cornerIndex = -1;
+        tag::CameraId cameraId = tag::CameraId::LEFT_OR_MONO;
+        int tagId = -1;
+    };
+    vector<TagCornerEdgeRecord> vTagCornerEdges;
+    vTagCornerEdges.reserve(tagConstraints.size() * 8);
+
     const float deltaMono = sqrt(5.991);
     const float deltaStereo = sqrt(7.815);
+    const float chi2Tag = 5.991f;
+    const float deltaTag = sqrt(5.991);
 
     {
     unique_lock<mutex> lock(MapPoint::mGlobalMutex);
@@ -904,7 +940,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                     vpEdgesMono.push_back(e);
                     vnIndexEdgeMono.push_back(i);
                 }
-                else  // Stereo observation
+                else  // Stereo observation，双目pinhole
                 {
                     nInitialCorrespondences++;
                     pFrame->mvbOutlier[i] = false;
@@ -939,7 +975,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                     vnIndexEdgeStereo.push_back(i);
                 }
             }
-            //SLAM with respect a rigid body (KannalaBrandt dual-camera, Nleft>=0)
+            //SLAM with respect a rigid body (KannalaBrandt dual-camera, Nleft>=0) 双目鱼眼
             else{
                 nInitialCorrespondences++;
 
@@ -972,7 +1008,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                     vpEdgesMono.push_back(e);
                     vnIndexEdgeMono.push_back(i);
                 }
-                else {
+                else { // Right camera observation
                     kpUn = pFrame->mvKeysRight[i - pFrame->Nleft];
 
                     Eigen::Matrix<double, 2, 1> obs;
@@ -1006,6 +1042,105 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     }
     }
 
+    // Tag 固定世界角点 unary edges（不计入 nInitialCorrespondences）
+    if(!tagConstraints.empty() && pFrame->mpCamera)
+    {
+        // 同帧多次 PoseOptimization：先清优化外点，再按检测有效性重新加边
+        pFrame->mTagFrameData.ResetOptOutliers();
+
+        // 按照 tagId 构建 tagConstraints 的索引
+        unordered_map<int, const tag::TagPoseConstraint *> tagById;
+        tagById.reserve(tagConstraints.size());
+        for(const tag::TagPoseConstraint &c : tagConstraints)
+            tagById[c.tagId] = &c;
+
+        const float invSigma2Tag =
+            1.0f / (tagParams.corner_sigma * tagParams.corner_sigma);
+        const Eigen::Matrix2d infoTag = Eigen::Matrix2d::Identity() * invSigma2Tag;
+        const g2o::SE3Quat Trl(
+            pFrame->GetRelativePoseTrl().unit_quaternion().cast<double>(),
+            pFrame->GetRelativePoseTrl().translation().cast<double>());
+
+        // 添加 Tag 角点边函数，在后面调用
+        auto addTagObs = [&](tag::TagObservation &obs, bool isRight) {
+            if(!obs.IsDetectValid())
+                return;
+            const auto it = tagById.find(obs.tag_id);
+            if(it == tagById.end())
+                return;
+
+            GeometricCamera *cam = isRight ? pFrame->mpCamera2 : pFrame->mpCamera;
+            if(!cam)
+                return;
+
+            const bool fisheye = cam->GetType() == GeometricCamera::CAM_FISHEYE;
+            // 鱼眼：corners_raw；针孔：corners_undistorted（与 TagOptimizer 一致）
+            const auto &uv = fisheye ? obs.corners_raw : obs.corners_undistorted; 
+
+            for(int k = 0; k < 4; ++k)
+            {
+                Eigen::Matrix<double, 2, 1> meas;
+                meas << uv[k].x, uv[k].y;
+
+                TagCornerEdgeRecord rec;
+                rec.observation = &obs;
+                rec.cornerIndex = k; // 角点索引
+                rec.cameraId = obs.camera_id;
+                rec.tagId = obs.tag_id;
+
+                if(!isRight)
+                {
+                    auto *e = new ORB_SLAM3::EdgeSE3ProjectXYZOnlyPose();
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                        optimizer.vertex(0)));
+                    e->setMeasurement(meas);
+                    e->setInformation(infoTag);
+                    auto *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(deltaTag);
+                    e->pCamera = pFrame->mpCamera;
+                    e->Xw = it->second->worldCorners[k];
+                    optimizer.addEdge(e);
+                    // 这里将edge保存到TagCornerEdgeRecord中，方便后面使用
+                    rec.leftEdge = e;
+                }
+                else
+                {
+                    auto *e = new ORB_SLAM3::EdgeSE3ProjectXYZOnlyPoseToBody();
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                        optimizer.vertex(0)));
+                    e->setMeasurement(meas);
+                    e->setInformation(infoTag);
+                    auto *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(deltaTag);
+                    e->pCamera = pFrame->mpCamera2;
+                    e->Xw = it->second->worldCorners[k];
+                    e->mTrl = Trl;
+                    optimizer.addEdge(e);
+                    rec.rightEdge = e;
+                }
+                vTagCornerEdges.push_back(rec);
+            }
+        };
+
+        for(tag::TagObservation &obs : pFrame->mTagFrameData.left)
+            addTagObs(obs, false);
+        if(pFrame->mpCamera2)
+        {
+            for(tag::TagObservation &obs : pFrame->mTagFrameData.right)
+                addTagObs(obs, true);
+        }
+
+        if(tagParams.verbose)
+        {
+            cout << "[TagPoseOpt] added corner edges=" << vTagCornerEdges.size()
+                 << " constraints=" << tagConstraints.size()
+                 << " frame_id=" << pFrame->mnId << endl;
+        }
+    }
+
+    // 第一版：仍要求足够 ORB 匹配；Tag 仅作增强约束
     if(nInitialCorrespondences<3)
         return 0;
 
@@ -1016,6 +1151,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     const int its[4]={10,10,10,10};    
 
     int nBad=0;
+    int nTagCornerInliers = 0;
     for(size_t it=0; it<4; it++)
     {
         Tcw = pFrame->GetPose();
@@ -1112,6 +1248,96 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                 e->setRobustKernel(0);
         }
 
+        // Tag 角点级分类（不计入 nBad / 返回值）
+        for(TagCornerEdgeRecord &rec : vTagCornerEdges)
+        {
+            g2o::OptimizableGraph::Edge *e = nullptr;
+            if(rec.leftEdge)
+                e = rec.leftEdge;
+            else
+                e = rec.rightEdge;
+            if(!e || !rec.observation)
+                continue;
+
+            if(rec.observation->corner_outliers[rec.cornerIndex])
+                e->computeError();
+
+            const float chi2 = e->chi2();
+            // 如果chi2大于chi2Tag，则将角点标记为外点
+            if(chi2 > chi2Tag)
+            {
+                rec.observation->corner_outliers[rec.cornerIndex] = true;
+                e->setLevel(1);
+            }
+            else
+            {
+                rec.observation->corner_outliers[rec.cornerIndex] = false;
+                e->setLevel(0);
+            }
+
+            if(it == 2)
+                e->setRobustKernel(0);
+        }
+
+        // 组级筛选：同一相机同一 Tag 至少 min_inlier_corners 个角点内点
+        {
+            unordered_map<uint64_t, vector<size_t>> groups;
+            groups.reserve(vTagCornerEdges.size());
+            // 按照tagId和cameraId分组
+            auto groupKey = [](int tagId, tag::CameraId cam) -> uint64_t {
+                return (static_cast<uint64_t>(static_cast<uint32_t>(tagId)) << 8) |
+                       static_cast<uint64_t>(static_cast<uint8_t>(cam));
+            };
+            // 将TagCornerEdgeRecord按照tagId和cameraId分组
+            for(size_t i = 0; i < vTagCornerEdges.size(); ++i)
+            {
+                const TagCornerEdgeRecord &rec = vTagCornerEdges[i];
+                groups[groupKey(rec.tagId, rec.cameraId)].push_back(i);
+            }
+
+            nTagCornerInliers = 0;
+            for(auto &kv : groups)
+            {
+                int nIn = 0;
+                for(size_t idx : kv.second)
+                {
+                    const TagCornerEdgeRecord &rec = vTagCornerEdges[idx];
+                    // 如果角点内点数量大于等于min_inlier_corners，则将该组保留
+                    if(rec.observation &&
+                       !rec.observation->corner_outliers[rec.cornerIndex])
+                        nIn++;
+                }
+                const bool keep = nIn >= tagParams.min_inlier_corners;
+                tag::TagObservation *obs =
+                    vTagCornerEdges[kv.second.front()].observation;
+                if(obs)
+                    obs->is_opt_outlier = !keep;
+
+                // 遍历该组的所有角点
+                for(size_t idx : kv.second)
+                {
+                    TagCornerEdgeRecord &rec = vTagCornerEdges[idx];
+                    g2o::OptimizableGraph::Edge *e =
+                        rec.leftEdge
+                            ? static_cast<g2o::OptimizableGraph::Edge *>(rec.leftEdge)
+                            : static_cast<g2o::OptimizableGraph::Edge *>(rec.rightEdge);
+                    // 如果该组不保留，则将该组的所有角点标记为外点
+                    if(!keep)
+                    {
+                        if(rec.observation)
+                            rec.observation->corner_outliers[rec.cornerIndex] = true;
+                        if(e)
+                            e->setLevel(1);
+                    }
+                    // 如果该组保留，则将该组的所有角点标记为内点
+                    else if(e && e->level() == 0)
+                    {
+                        nTagCornerInliers++;
+                    }
+                }
+            }
+        }
+
         if(optimizer.edges().size()<10)
             break;
     }    
@@ -1123,11 +1349,22 @@ int Optimizer::PoseOptimization(Frame *pFrame)
             SE3quat_recov.translation().cast<float>());
     pFrame->SetPose(pose);
 
+    if(tagParams.verbose && !vTagCornerEdges.empty())
+    {
+        cout << "[TagPoseOpt] done frame_id=" << pFrame->mnId
+             << " orb_inliers=" << (nInitialCorrespondences - nBad)
+             << " tag_corner_inliers=" << nTagCornerInliers << endl;
+    }
+
     return nInitialCorrespondences-nBad;
 }
 
-void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges)
+void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges,
+                                      const tag::TagLocalBAParams &tagParams, tag::TagLocalBAStats *tagStats)
 {
+    if(tagStats)
+        *tagStats = tag::TagLocalBAStats();
+
     // Local KeyFrames: First Breath Search from Current Keyframe
     list<KeyFrame*> lLocalKeyFrames;
 
@@ -1146,6 +1383,8 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 
     // Local MapPoints seen in Local KeyFrames
     num_fixedKF = 0;
+    bool bHasInitKF = false;
+    bool bHasFixedPoseKF = false;
     list<MapPoint*> lLocalMapPoints;
     set<MapPoint*> sNumObsMP;
     for(list<KeyFrame*>::iterator lit=lLocalKeyFrames.begin() , lend=lLocalKeyFrames.end(); lit!=lend; lit++)
@@ -1154,7 +1393,10 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         if(pKFi->mnId==pMap->GetInitKFid())
         {
             num_fixedKF = 1;
+            bHasInitKF = true;
         }
+        if(pKFi->IsFixedPose())
+            bHasFixedPoseKF = true;
         vector<MapPoint*> vpMPs = pKFi->GetMapPointMatches();
         for(vector<MapPoint*>::iterator vit=vpMPs.begin(), vend=vpMPs.end(); vit!=vend; vit++)
         {
@@ -1189,12 +1431,64 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
             }
         }
     }
-    num_fixedKF = lFixedCameras.size() + num_fixedKF;
 
-
-    if(num_fixedKF == 0)
+    // Local MapTags（须在 gauge 判定之前完成，以便 FIXED_ANCHOR 提供 gauge，并扩展外围 Fixed KF）
+    list<tag::MapTagData*> lLocalMapTags;
+    bool bHasFixedAnchorTag = false;
+    if(tagParams.enable)
     {
-        Verbose::PrintMess("LM-LBA: There are 0 fixed KF in the optimizations, LBA aborted", Verbose::VERBOSITY_NORMAL);
+        set<tag::MapTagData*> sLocalTags;
+        // 获取每个KF的MapTagAssociations，并将其中的MapTagData添加到lLocalMapTags中
+        for(KeyFrame* pKFi : lLocalKeyFrames)
+        {
+            const auto assocs = pKFi->GetMapTagAssociations();
+            for(const auto &kv : assocs)
+            {
+                tag::MapTagData *pTag = kv.second.pMapTag;
+                if(!pTag || pTag->IsBad() || pTag->GetMap() != pCurrentMap)
+                    continue;
+                if(!pTag->HasPose() || pTag->GetTagSize() <= 0.0f)
+                    continue;
+                const tag::MapTagState st = pTag->GetState();
+                // 如果MapTagData的State为FIXED_ANCHOR，则将其添加到lLocalMapTags中，并固定该Tag
+                if(st == tag::MapTagState::FIXED_ANCHOR)
+                {
+                    if(sLocalTags.insert(pTag).second)
+                        lLocalMapTags.push_back(pTag);
+                    bHasFixedAnchorTag = true;
+                }
+                // 如果MapTagData的State为ACTIVE，则将其添加到lLocalMapTags中，并优化该Tag对应的global pose
+                else if(st == tag::MapTagState::ACTIVE && tagParams.optimize_active)
+                {
+                    if(sLocalTags.insert(pTag).second)
+                        lLocalMapTags.push_back(pTag);
+                }
+            }
+        }
+
+        for(tag::MapTagData *pTag : lLocalMapTags)
+        {
+            const auto observations = pTag->GetObservations();
+            for(const auto &mit : observations)
+            {
+                KeyFrame *pKFi = mit.first;
+                if(!pKFi || pKFi->isBad() || pKFi->GetMap() != pCurrentMap)
+                    continue;
+                if(pKFi->mnBALocalForKF != pKF->mnId && pKFi->mnBAFixedForKF != pKF->mnId)
+                {
+                    pKFi->mnBAFixedForKF = pKF->mnId;
+                    lFixedCameras.push_back(pKFi);
+                }
+            }
+        }
+    }
+
+    num_fixedKF = static_cast<int>(lFixedCameras.size()) + num_fixedKF;
+
+    const bool bHasGauge = bHasInitKF || bHasFixedPoseKF || !lFixedCameras.empty() || bHasFixedAnchorTag;
+    if(!bHasGauge)
+    {
+        Verbose::PrintMess("LM-LBA: No gauge (fixed KF / FIXED_ANCHOR Tag), LBA aborted", Verbose::VERBOSITY_NORMAL);
         return;
     }
 
@@ -1378,13 +1672,15 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                 }
 
                 if(pKFi->NLeft != -1){
-                    int rightIndex = get<1>(mit->second);
+                    // get<1> 存的是组合特征全局索引 (= NLeft + rightLocalIndex)
+                    const int rightGlobalIndex = get<1>(mit->second);
+                    const int rightLocalIndex = rightGlobalIndex - pKFi->NLeft;
 
-                    if(rightIndex != -1 ){
-                        rightIndex -= pKFi->NLeft;
-
+                    if(rightGlobalIndex >= pKFi->NLeft &&
+                       rightLocalIndex >= 0 &&
+                       rightLocalIndex < static_cast<int>(pKFi->mvKeysRight.size())){
                         Eigen::Matrix<double,2,1> obs;
-                        cv::KeyPoint kp = pKFi->mvKeysRight[rightIndex];
+                        cv::KeyPoint kp = pKFi->mvKeysRight[rightLocalIndex];
                         obs << kp.pt.x, kp.pt.y;
 
                         ORB_SLAM3::EdgeSE3ProjectXYZToBody *e = new ORB_SLAM3::EdgeSE3ProjectXYZToBody();
@@ -1415,7 +1711,206 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
             }
         }
     }
-    num_edges = nEdges;
+    num_MPs = nPoints;
+
+    // Tag 位姿顶点
+    struct TagCornerEdgeRecord
+    {
+        ORB_SLAM3::EdgeSE3ProjectTagCorner *leftEdge = nullptr;
+        ORB_SLAM3::EdgeSE3ProjectTagCornerToBody *rightEdge = nullptr;
+        KeyFrame *pKF = nullptr;
+        tag::MapTagData *pTag = nullptr;
+        tag::TagObservation *observation = nullptr;
+        int cornerIndex = -1;
+        tag::CameraId cameraId = tag::CameraId::LEFT_OR_MONO;
+        int tagId = -1;
+        bool outlier = false;
+    };
+
+    map<tag::MapTagData*, unsigned long> mTagVertexId;
+    map<tag::MapTagData*, Sophus::SE3f> mTagPoseBefore;
+    vector<TagCornerEdgeRecord> vTagCornerEdges;
+    int nTagEdges = 0;
+
+    if(tagParams.enable && !lLocalMapTags.empty())
+    {
+        unsigned long maxPointVid = maxKFid;
+        for(MapPoint *pMP : lLocalMapPoints)
+        {
+            const unsigned long vid = pMP->mnId + maxKFid + 1;
+            if(vid > maxPointVid)
+                maxPointVid = vid;
+        }
+        // 设置 Tag 位姿顶点：ID 接在 MapPoint 最大顶点之后，避免与 KF/MP 冲突
+        unsigned long nextTagVid = maxPointVid + 1;
+
+        for(tag::MapTagData *pTag : lLocalMapTags)
+        {
+            g2o::VertexSE3Expmap *vTag = new g2o::VertexSE3Expmap();
+            const Sophus::SE3f Twt = pTag->GetPose();
+            mTagPoseBefore[pTag] = Twt;
+            vTag->setEstimate(g2o::SE3Quat(Twt.unit_quaternion().cast<double>(),
+                                           Twt.translation().cast<double>()));
+            vTag->setId(nextTagVid);
+            vTag->setFixed(pTag->IsFixed());
+            optimizer.addVertex(vTag);
+            mTagVertexId[pTag] = nextTagVid;
+            ++nextTagVid;
+        }
+
+        // 设置Tag Corner Edge的Info矩阵以及chi2阈值
+        const float invSigma2Tag =
+            1.0f / (tagParams.corner_sigma * tagParams.corner_sigma);
+        const Eigen::Matrix2d infoTag = Eigen::Matrix2d::Identity() * invSigma2Tag;
+        const float chi2Tag = 5.991f;
+        (void)chi2Tag;
+
+        vTagCornerEdges.reserve(lLocalMapTags.size() * 8);
+
+        auto tagLocalCorner = [](float tag_size, int k) -> Eigen::Vector3d {
+            const double h = 0.5 * static_cast<double>(tag_size);
+            switch(k)
+            {
+            case 0: return Eigen::Vector3d(-h, h, 0.0);
+            case 1: return Eigen::Vector3d(h, h, 0.0);
+            case 2: return Eigen::Vector3d(h, -h, 0.0);
+            default: return Eigen::Vector3d(-h, -h, 0.0);
+            }
+        };
+
+        // 遍历每个Tag，并添加Tag对应的Corner Edge
+        for(tag::MapTagData *pTag : lLocalMapTags)
+        {
+            const auto itVid = mTagVertexId.find(pTag);
+            if(itVid == mTagVertexId.end())
+                continue;
+            const int tagVid = static_cast<int>(itVid->second);
+            const float tag_size = pTag->GetTagSize();
+            const int tag_id = pTag->Id();
+            const auto observations = pTag->GetObservations();
+
+            for(const auto &mit : observations)
+            {
+                KeyFrame *pKFi = mit.first;
+                if(!pKFi || pKFi->isBad() || pKFi->GetMap() != pCurrentMap)
+                    continue;
+                if(!optimizer.vertex(pKFi->mnId))
+                    continue;
+
+                const int leftIndex = mit.second.leftIndex;
+                const int rightIndex = mit.second.rightIndex;
+                const g2o::SE3Quat Trl(
+                    pKFi->GetRelativePoseTrl().unit_quaternion().cast<double>(),
+                    pKFi->GetRelativePoseTrl().translation().cast<double>());
+
+                auto addCorners = [&](tag::TagObservation &obs, bool isRight) {
+                    if(!obs.IsDetectValid())
+                        return;
+                    GeometricCamera *cam = isRight ? pKFi->mpCamera2 : pKFi->mpCamera;
+                    if(!cam)
+                        return;
+
+                    obs.ResetOptOutliers();
+
+                    const bool fisheye = cam->GetType() == GeometricCamera::CAM_FISHEYE;
+                    const auto &uv = fisheye ? obs.corners_raw : obs.corners_undistorted;
+
+                    for(int k = 0; k < 4; ++k)
+                    {
+                        Eigen::Matrix<double, 2, 1> meas;
+                        meas << uv[k].x, uv[k].y;
+
+                        TagCornerEdgeRecord rec;
+                        rec.pKF = pKFi;
+                        rec.pTag = pTag;
+                        rec.observation = &obs;
+                        rec.cornerIndex = k;
+                        rec.cameraId = obs.camera_id;
+                        rec.tagId = tag_id;
+
+                        if(!isRight)
+                        {
+                            auto *e = new ORB_SLAM3::EdgeSE3ProjectTagCorner();
+                            e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                                optimizer.vertex(tagVid)));
+                            e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                                optimizer.vertex(pKFi->mnId)));
+                            e->setMeasurement(meas);
+                            e->setInformation(infoTag);
+                            auto *rk = new g2o::RobustKernelHuber;
+                            e->setRobustKernel(rk);
+                            rk->setDelta(thHuberMono);
+                            e->pCamera = cam;
+                            e->X_t = tagLocalCorner(tag_size, k);
+                            optimizer.addEdge(e);
+                            rec.leftEdge = e;
+                        }
+                        else
+                        {
+                            auto *e = new ORB_SLAM3::EdgeSE3ProjectTagCornerToBody();
+                            e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                                optimizer.vertex(tagVid)));
+                            e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(
+                                                optimizer.vertex(pKFi->mnId)));
+                            e->setMeasurement(meas);
+                            e->setInformation(infoTag);
+                            auto *rk = new g2o::RobustKernelHuber;
+                            e->setRobustKernel(rk);
+                            rk->setDelta(thHuberMono);
+                            e->pCamera = cam;
+                            e->X_t = tagLocalCorner(tag_size, k);
+                            e->mTrl = Trl;
+                            optimizer.addEdge(e);
+                            rec.rightEdge = e;
+                        }
+                        vTagCornerEdges.push_back(rec);
+                        nTagEdges++;
+                    }
+                };
+
+                if(leftIndex >= 0 &&
+                   leftIndex < static_cast<int>(pKFi->mTagFrameData.left.size()))
+                    addCorners(pKFi->mTagFrameData.left[leftIndex], false);
+                if(rightIndex >= 0 && pKFi->mpCamera2 &&
+                   rightIndex < static_cast<int>(pKFi->mTagFrameData.right.size()))
+                    addCorners(pKFi->mTagFrameData.right[rightIndex], true);
+            }
+        }
+    }
+
+    num_edges = nEdges + nTagEdges;
+    if(tagStats)
+    {
+        tagStats->num_tags = static_cast<int>(lLocalMapTags.size());
+        tagStats->num_tag_edges = nTagEdges;
+    }
+
+    // Debug用，优化前Tag角点投影误差RMSE
+    auto computeTagCornerRmse = [&]() -> double {
+        if(vTagCornerEdges.empty())
+            return -1.0;
+        double sum = 0.0;
+        int n = 0;
+        for(TagCornerEdgeRecord &rec : vTagCornerEdges)
+        {
+            g2o::OptimizableGraph::Edge *e = nullptr;
+            if(rec.leftEdge)
+                e = rec.leftEdge;
+            else
+                e = rec.rightEdge;
+            if(!e)
+                continue;
+            e->computeError();
+            sum += e->chi2();
+            ++n;
+        }
+        if(n == 0)
+            return -1.0;
+        return std::sqrt(sum / n);
+    };
+
+    const double tagRmseBefore =
+        tagParams.verbose ? computeTagCornerRmse() : -1.0;
 
     if(pbStopFlag)
         if(*pbStopFlag)
@@ -1423,6 +1918,9 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 
     optimizer.initializeOptimization();
     optimizer.optimize(10);
+
+    const double tagRmseAfter =
+        tagParams.verbose ? computeTagCornerRmse() : -1.0;
 
     vector<pair<KeyFrame*,MapPoint*> > vToErase;
     vToErase.reserve(vpEdgesMono.size()+vpEdgesBody.size()+vpEdgesStereo.size());
@@ -1473,6 +1971,90 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         }
     }
 
+    // Tag 角点级卡方 + 正深度；再按 KF/Tag/相机分组（至少 min_inlier_corners/4）
+    const float chi2TagTh = 5.991f;
+    int nTagOutliers = 0;
+    if(!vTagCornerEdges.empty())
+    {
+        for(TagCornerEdgeRecord &rec : vTagCornerEdges)
+        {
+            bool bad = false;
+            if(rec.leftEdge)
+                bad = rec.leftEdge->chi2() > chi2TagTh || !rec.leftEdge->isDepthPositive();
+            else if(rec.rightEdge)
+                bad = rec.rightEdge->chi2() > chi2TagTh || !rec.rightEdge->isDepthPositive();
+            rec.outlier = bad;
+        }
+
+        unordered_map<uint64_t, vector<size_t>> groups;
+        groups.reserve(vTagCornerEdges.size());
+        // 组键生成函数，将KF ID、Tag ID和相机 ID 组合成一个唯一的64位整数
+        auto groupKey = [](unsigned long kfId, int tagId, tag::CameraId cam) -> uint64_t {
+            return (static_cast<uint64_t>(kfId) << 32) |
+                   (static_cast<uint64_t>(static_cast<uint32_t>(tagId)) << 8) |
+                   static_cast<uint64_t>(static_cast<uint8_t>(cam));
+        };
+        for(size_t i = 0; i < vTagCornerEdges.size(); ++i)
+        {
+            const TagCornerEdgeRecord &rec = vTagCornerEdges[i];
+            if(!rec.pKF)
+                continue;
+            groups[groupKey(rec.pKF->mnId, rec.tagId, rec.cameraId)].push_back(i);
+        }
+
+        // 遍历每个组，并检查每个组的角点是否为内点
+        for(auto &kv : groups)
+        {
+            int nIn = 0;
+            for(size_t idx : kv.second)
+            {
+                if(!vTagCornerEdges[idx].outlier)
+                    ++nIn;
+            }
+            const bool keep = nIn >= tagParams.min_inlier_corners;
+            for(size_t idx : kv.second)
+            {
+                // 遍历每个组中的角点，并标记为外点
+                TagCornerEdgeRecord &rec = vTagCornerEdges[idx];
+                if(!keep)
+                    rec.outlier = true;
+                if(rec.outlier)
+                    ++nTagOutliers;
+            }
+        }
+    }
+    if(tagStats)
+        tagStats->num_tag_outliers = nTagOutliers;
+
+    if(tagParams.verbose && !vTagCornerEdges.empty())
+    {
+        cout << "[TagLBA] tags=" << lLocalMapTags.size()
+             << " tag_edges=" << nTagEdges
+             << " tag_outliers=" << nTagOutliers
+             << " corner_rmse_before=" << tagRmseBefore
+             << " corner_rmse_after=" << tagRmseAfter << endl;
+        for(tag::MapTagData *pTag : lLocalMapTags)
+        {
+            if(pTag->IsFixed())
+                continue;
+            const auto itVid = mTagVertexId.find(pTag);
+            const auto itBefore = mTagPoseBefore.find(pTag);
+            if(itVid == mTagVertexId.end() || itBefore == mTagPoseBefore.end())
+                continue;
+            g2o::VertexSE3Expmap *vTag =
+                static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(itVid->second));
+            if(!vTag)
+                continue;
+            const g2o::SE3Quat est = vTag->estimate();
+            Sophus::SE3f T_after(est.rotation().cast<float>(),
+                                est.translation().cast<float>());
+            const Sophus::SE3f dT = itBefore->second.inverse() * T_after;
+            const float t_norm = dT.translation().norm();
+            const float angle = dT.so3().log().norm();
+            cout << "[TagLBA] tag_id=" << pTag->Id()
+                 << " dtrans=" << t_norm << " dang=" << angle << endl;
+        }
+    }
 
     // Get Map Mutex
     unique_lock<mutex> lock(pMap->mMutexMapUpdate);
@@ -1506,6 +2088,61 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
         pMP->SetWorldPos(vPoint->estimate().cast<float>());
         pMP->UpdateNormalAndDepth();
+    }
+
+    // ACTIVE Tag 位姿 + 角点/组级临时外点（不 EraseMapTag / 不删关联）
+    if(tagParams.enable)
+    {
+        // 遍历每个ACTIVE Tag，并更新其位姿
+        for(tag::MapTagData *pTag : lLocalMapTags)
+        {
+            if(pTag->IsFixed())
+                continue;
+            const auto itVid = mTagVertexId.find(pTag);
+            if(itVid == mTagVertexId.end())
+                continue;
+            g2o::VertexSE3Expmap *vTag =
+                static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(itVid->second));
+            if(!vTag)
+                continue;
+            const g2o::SE3Quat est = vTag->estimate();
+            pTag->SetPose(Sophus::SE3f(est.rotation().cast<float>(),
+                                       est.translation().cast<float>()));
+        }
+
+        // 先按观测清零，再按本次结果写回
+        set<tag::TagObservation*> sTouchedObs;
+        // 遍历每个Tag Corner Edge，并将其对应的TagObservation添加到sTouchedObs中
+        for(const TagCornerEdgeRecord &rec : vTagCornerEdges)
+        {
+            if(rec.observation)
+                sTouchedObs.insert(rec.observation);
+        }
+        // 遍历每个sTouchedObs，并将其对应的TagObservation的is_opt_outlier设置为false
+        for(tag::TagObservation *obs : sTouchedObs)
+        {
+            obs->is_opt_outlier = false;
+            obs->corner_outliers = {{false, false, false, false}};
+        }
+
+        unordered_map<tag::TagObservation*, int> obsInliers;
+        unordered_map<tag::TagObservation*, int> obsTotal;
+        // 遍历每个Tag Corner Edge，并将其对应的TagObservation的corner_outliers设置为rec.outlier
+        for(const TagCornerEdgeRecord &rec : vTagCornerEdges)
+        {
+            if(!rec.observation || rec.cornerIndex < 0 || rec.cornerIndex >= 4)
+                continue;
+            rec.observation->corner_outliers[rec.cornerIndex] = rec.outlier;
+            obsTotal[rec.observation]++;
+            if(!rec.outlier)
+                obsInliers[rec.observation]++;
+        }
+        // 遍历每个sTouchedObs，并将其对应的TagObservation的is_opt_outlier设置为nIn < tagParams.min_inlier_corners
+        for(tag::TagObservation *obs : sTouchedObs)
+        {
+            const int nIn = obsInliers[obs];
+            obs->is_opt_outlier = nIn < tagParams.min_inlier_corners;
+        }
     }
 
     pMap->IncreaseChangeIndex();
@@ -2809,14 +3446,17 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int&
 
                 // Fisheye dual-camera right observation
                 if(pKFi->NLeft != -1){
-                    int rightIndex = get<1>(mit->second);
+                    // get<1> 存的是组合特征全局索引 (= NLeft + rightLocalIndex)
+                    const int rightGlobalIndex = get<1>(mit->second);
+                    const int rightLocalIndex = rightGlobalIndex - pKFi->NLeft;
 
-                    if(rightIndex != -1 ){
-                        rightIndex -= pKFi->NLeft;
+                    if(rightGlobalIndex >= pKFi->NLeft &&
+                       rightLocalIndex >= 0 &&
+                       rightLocalIndex < static_cast<int>(pKFi->mvKeysRight.size())){
                         mVisEdges[pKFi->mnId]++;
 
                         Eigen::Matrix<double,2,1> obs;
-                        cv::KeyPoint kp = pKFi->mvKeysRight[rightIndex];
+                        cv::KeyPoint kp = pKFi->mvKeysRight[rightLocalIndex];
                         obs << kp.pt.x, kp.pt.y;
 
                         EdgeMono* e = new EdgeMono(1);
@@ -2826,9 +3466,9 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, int&
                         e->setMeasurement(obs);
 
                         // Add here uncerteinty
-                        const float unc2 = pKFi->mpCamera->uncertainty2(obs);
+                        const float unc2 = pKFi->mpCamera2->uncertainty2(obs);
 
-                        const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave]/unc2;
+                        const float &invSigma2 = pKFi->mvInvLevelSigma2[kp.octave]/unc2;
                         e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
 
                         g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
@@ -4646,7 +5286,7 @@ int Optimizer::PoseInertialOptimizationLastKeyFrame(Frame *pFrame, bool bRecInit
                     e->setMeasurement(obs);
 
                     // Add here uncerteinty
-                    const float unc2 = pFrame->mpCamera->uncertainty2(obs);
+                    const float unc2 = pFrame->mpCamera2->uncertainty2(obs);
 
                     const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave]/unc2;
                     e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
@@ -5029,7 +5669,7 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
                     e->setMeasurement(obs);
 
                     // Add here uncerteinty
-                    const float unc2 = pFrame->mpCamera->uncertainty2(obs);
+                    const float unc2 = pFrame->mpCamera2->uncertainty2(obs);
 
                     const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave]/unc2;
                     e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);

@@ -82,13 +82,15 @@ inline void BuildSquareObjectPoints(double tag_size, std::vector<cv::Point3f> &o
 //   1) L→R：左目未消歧时，两候选经 T_rl 投到右目，写回 left
 //   2) 若左目仍失败，则 R→L：右目两候选经 T_lr 投到左目，写回 right
 // 任一侧成功即返回 true。
+// log_stereo=false：不打印 [TagStereo] ok/fail（例如 Tag 已在地图中时）
 bool DisambiguateWithStereo(tag::TagObservation &left_obs,
                             tag::TagObservation &right_obs,
                             const Sophus::SE3f &T_lr,
                             GeometricCamera *cam_left,
                             GeometricCamera *cam_right,
                             double tag_size,
-                            double tau_rho = 3.0);
+                            double tau_rho = 3.0,
+                            bool log_stereo = true);
 
 class AprilTagDetector
 {

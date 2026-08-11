@@ -40,6 +40,7 @@
 #include "GeometricCamera.h"
 
 #include "ua_tag/TagInitializer.h"
+#include "ua_tag/TagPoseConstraints.h"
 
 #include <fstream>
 #include <mutex>
@@ -162,6 +163,11 @@ public:
 
     cv::Mat mImGray;
 
+    // Tag 可视化开关（见 Tag.save_vis / Tag.show_in_orb_viewer）
+    bool mbTagSaveVis = false;
+    std::string mTagSaveVisDir = "tag_vis";
+    bool mbTagShowInOrbViewer = false;
+
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
     std::vector<int> mvIniMatches;
@@ -223,6 +229,9 @@ protected:
     void TagTrack();
     void EstimateAndVisualizeTagPoses();
     void TrackAndExpandTagMap();
+
+    // 统一 pose-only 入口：useTags 且开关开启时构建 Tag 快照并联合优化（入口内重置优化外点）
+    int OptimizeCurrentPose(bool useTags);
 
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
@@ -398,6 +407,10 @@ protected:
 
     bool mbSaveOnlinePose = false;
     std::string mSaveOnlinePoseFile = "OnlineCameraTrajectory.txt";
+
+    // Tag 联合 PoseOptimization（默认关闭；见 Tag.pose_optimization）
+    tag::TagPoseOptParams mTagPoseOptParams;
+
     std::ofstream mOnlinePoseFile;
 
 #ifdef REGISTER_LOOP

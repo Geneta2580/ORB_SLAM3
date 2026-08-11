@@ -20,9 +20,9 @@ namespace tag {
 // MapTag 生命周期状态（转换逻辑后续阶段实现）
 enum class MapTagState : std::uint8_t
 {
-    CANDIDATE = 0,   // 刚创建，观测不足
-    ACTIVE,          // 正常地图实体，位姿可优化
-    FIXED_ANCHOR,    // 固定的米制/世界坐标锚点
+    CANDIDATE = 0,   // 刚创建，观测不足 / 未消歧
+    ACTIVE,          // 系统自建 Tag，世界位姿可优化（含初始化阶段）
+    FIXED_ANCHOR,    // 仅外部可信世界位姿（测量/标定/加载的 Tag map）
     BAD              // 已失效，等待从 Map 移除
 };
 

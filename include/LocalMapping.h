@@ -26,6 +26,7 @@
 #include "Tracking.h"
 #include "KeyFrameDatabase.h"
 #include "Settings.h"
+#include "ua_tag/TagPoseConstraints.h"
 
 #include <mutex>
 
@@ -51,6 +52,8 @@ public:
     void SetLoopCloser(LoopClosing* pLoopCloser);
 
     void SetTracker(Tracking* pTracker);
+
+    void SetTagLocalBAParams(const tag::TagLocalBAParams &params);
 
     // Main function
     void Run();
@@ -172,6 +175,8 @@ protected:
 
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
+
+    tag::TagLocalBAParams mTagLocalBAParams;
 
     std::list<KeyFrame*> mlNewKeyFrames;
 

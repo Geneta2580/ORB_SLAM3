@@ -123,3 +123,16 @@ Tag.verbose: 1
 Tag.export: 1                  # 1=导出；初始化定标后写 TagMap+ORB 初始地图到 Tag.export_dir
 Tag.export_dir: "tag_export"   # tag_map_corners.csv / orb_init_map_points.csv / *_keyframes_tum.txt
 Tag.viewer: 0
+Tag.save_vis: 0                 # 1=每帧保存 Tag 检测图到 Tag.save_vis_dir
+Tag.save_vis_dir: "tag_vis"
+Tag.show_in_orb_viewer: 1       # 1=ORB Current Frame 叠加 Tag；双目并排左右
+# ORB+Tag 联合 PoseOptimization（仅 TrackLocalMap；默认关）
+Tag.pose_optimization: 1
+Tag.corner_sigma: 2.0
+Tag.min_inlier_corners: 3
+Tag.fixed_only: 0
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1

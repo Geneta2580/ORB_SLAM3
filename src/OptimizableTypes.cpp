@@ -18,7 +18,104 @@
 
 #include "OptimizableTypes.h"
 
+#include "CameraModels/Pinhole.h"
+
+#include "Thirdparty/g2o/g2o/core/block_solver.h"
+#include "Thirdparty/g2o/g2o/core/jacobian_workspace.h"
+#include "Thirdparty/g2o/g2o/core/optimization_algorithm_levenberg.h"
+#include "Thirdparty/g2o/g2o/core/sparse_optimizer.h"
+#include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"
+
+#include <cmath>
+#include <iostream>
+#include <memory>
+
 namespace ORB_SLAM3 {
+
+namespace {
+
+inline Eigen::Matrix<double, 3, 6> SE3LeftPerturbDeriv(const Eigen::Vector3d &xyz)
+{
+    const double x = xyz(0);
+    const double y = xyz(1);
+    const double z = xyz(2);
+    Eigen::Matrix<double, 3, 6> SE3deriv;
+    SE3deriv << 0.f, z, -y, 1.f, 0.f, 0.f,
+                -z, 0.f, x, 0.f, 1.f, 0.f,
+                y, -x, 0.f, 0.f, 0.f, 1.f;
+    return SE3deriv;
+}
+
+template <typename EdgeT>
+bool CheckBinarySE3Jacobians(EdgeT *edge, double delta, double tol, double *max_abs_err)
+{
+    if(!edge || !edge->pCamera)
+        return false;
+
+    g2o::VertexSE3Expmap *v0 =
+        static_cast<g2o::VertexSE3Expmap *>(edge->vertices()[0]);
+    g2o::VertexSE3Expmap *v1 =
+        static_cast<g2o::VertexSE3Expmap *>(edge->vertices()[1]);
+    if(!v0 || !v1)
+        return false;
+
+    const g2o::SE3Quat T0 = v0->estimate();
+    const g2o::SE3Quat T1 = v1->estimate();
+
+    // 解析 Jacobian 需经 JacobianWorkspace 映射存储后再写 _jacobianOplus*
+    // 派生类 override 了无参 linearizeOplus，需显式走基类带 workspace 的入口
+    using BinaryBase =
+        g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap,
+                            g2o::VertexSE3Expmap>;
+    g2o::JacobianWorkspace jw;
+    jw.updateSize(edge);
+    jw.allocate();
+    static_cast<BinaryBase *>(edge)->linearizeOplus(jw);
+    const Eigen::Matrix<double, 2, 6> Ja = edge->jacobianOplusXi();
+    const Eigen::Matrix<double, 2, 6> Jb = edge->jacobianOplusXj();
+
+    Eigen::Matrix<double, 2, 6> Ja_num = Eigen::Matrix<double, 2, 6>::Zero();
+    Eigen::Matrix<double, 2, 6> Jb_num = Eigen::Matrix<double, 2, 6>::Zero();
+
+    for(int i = 0; i < 6; ++i)
+    {
+        Eigen::Matrix<double, 6, 1> xi = Eigen::Matrix<double, 6, 1>::Zero();
+        xi(i) = delta;
+        v0->setEstimate(g2o::SE3Quat::exp(xi) * T0);
+        edge->computeError();
+        const Eigen::Vector2d e_plus = edge->error();
+        xi(i) = -delta;
+        v0->setEstimate(g2o::SE3Quat::exp(xi) * T0);
+        edge->computeError();
+        const Eigen::Vector2d e_minus = edge->error();
+        Ja_num.col(i) = (e_plus - e_minus) / (2.0 * delta);
+        v0->setEstimate(T0);
+    }
+
+    for(int i = 0; i < 6; ++i)
+    {
+        Eigen::Matrix<double, 6, 1> xi = Eigen::Matrix<double, 6, 1>::Zero();
+        xi(i) = delta;
+        v1->setEstimate(g2o::SE3Quat::exp(xi) * T1);
+        edge->computeError();
+        const Eigen::Vector2d e_plus = edge->error();
+        xi(i) = -delta;
+        v1->setEstimate(g2o::SE3Quat::exp(xi) * T1);
+        edge->computeError();
+        const Eigen::Vector2d e_minus = edge->error();
+        Jb_num.col(i) = (e_plus - e_minus) / (2.0 * delta);
+        v1->setEstimate(T1);
+    }
+
+    const double err_a = (Ja - Ja_num).cwiseAbs().maxCoeff();
+    const double err_b = (Jb - Jb_num).cwiseAbs().maxCoeff();
+    const double err = std::max(err_a, err_b);
+    if(max_abs_err)
+        *max_abs_err = std::max(*max_abs_err, err);
+    return err < tol;
+}
+
+}  // namespace
     bool EdgeSE3ProjectXYZOnlyPose::read(std::istream& is){
         for (int i=0; i<2; i++){
             is >> _measurement[i];
@@ -327,6 +424,209 @@ namespace ORB_SLAM3 {
                 os << " " <<  information()(i,j);
             }
         return os.good();
+    }
+
+    EdgeSE3ProjectTagCorner::EdgeSE3ProjectTagCorner()
+        : BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>()
+    {
+    }
+
+    bool EdgeSE3ProjectTagCorner::read(std::istream &is)
+    {
+        for(int i = 0; i < 2; i++)
+            is >> _measurement[i];
+        for(int i = 0; i < 2; i++)
+            for(int j = i; j < 2; j++)
+            {
+                is >> information()(i, j);
+                if(i != j)
+                    information()(j, i) = information()(i, j);
+            }
+        return true;
+    }
+
+    bool EdgeSE3ProjectTagCorner::write(std::ostream &os) const
+    {
+        for(int i = 0; i < 2; i++)
+            os << measurement()[i] << " ";
+        for(int i = 0; i < 2; i++)
+            for(int j = i; j < 2; j++)
+                os << " " << information()(i, j);
+        return os.good();
+    }
+
+    void EdgeSE3ProjectTagCorner::linearizeOplus()
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+
+        const g2o::SE3Quat T_wt = vTag->estimate();
+        const g2o::SE3Quat T_cw = vCam->estimate();
+        const Eigen::Vector3d Xw = T_wt.map(X_t);
+        const Eigen::Vector3d Xc = T_cw.map(Xw);
+
+        const Eigen::Matrix<double, 2, 3> projectJac = -pCamera->projectJac(Xc);
+        const Eigen::Matrix3d Rcw = T_cw.rotation().toRotationMatrix();
+
+        _jacobianOplusXi = projectJac * Rcw * SE3LeftPerturbDeriv(Xw);
+        _jacobianOplusXj = projectJac * SE3LeftPerturbDeriv(Xc);
+    }
+
+    bool EdgeSE3ProjectTagCorner::checkJacobiansNumerical(double delta, double tol) const
+    {
+        auto *self = const_cast<EdgeSE3ProjectTagCorner *>(this);
+        double max_err = 0.0;
+        return CheckBinarySE3Jacobians(self, delta, tol, &max_err);
+    }
+
+    EdgeSE3ProjectTagCornerToBody::EdgeSE3ProjectTagCornerToBody()
+        : BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>()
+    {
+    }
+
+    bool EdgeSE3ProjectTagCornerToBody::read(std::istream &is)
+    {
+        for(int i = 0; i < 2; i++)
+            is >> _measurement[i];
+        for(int i = 0; i < 2; i++)
+            for(int j = i; j < 2; j++)
+            {
+                is >> information()(i, j);
+                if(i != j)
+                    information()(j, i) = information()(i, j);
+            }
+        return true;
+    }
+
+    bool EdgeSE3ProjectTagCornerToBody::write(std::ostream &os) const
+    {
+        for(int i = 0; i < 2; i++)
+            os << measurement()[i] << " ";
+        for(int i = 0; i < 2; i++)
+            for(int j = i; j < 2; j++)
+                os << " " << information()(i, j);
+        return os.good();
+    }
+
+    void EdgeSE3ProjectTagCornerToBody::linearizeOplus()
+    {
+        const g2o::VertexSE3Expmap *vTag =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const g2o::VertexSE3Expmap *vCam =
+            static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
+
+        const g2o::SE3Quat T_wt = vTag->estimate();
+        const g2o::SE3Quat T_lw = vCam->estimate();
+        const g2o::SE3Quat T_rw = mTrl * T_lw;
+        const Eigen::Vector3d Xw = T_wt.map(X_t);
+        const Eigen::Vector3d Xl = T_lw.map(Xw);
+        const Eigen::Vector3d Xr = mTrl.map(Xl);
+
+        const Eigen::Matrix<double, 2, 3> projectJac = -pCamera->projectJac(Xr);
+        const Eigen::Matrix3d Rrl = mTrl.rotation().toRotationMatrix();
+        const Eigen::Matrix3d Rrw = T_rw.rotation().toRotationMatrix();
+
+        _jacobianOplusXi = projectJac * Rrw * SE3LeftPerturbDeriv(Xw);
+        _jacobianOplusXj = projectJac * Rrl * SE3LeftPerturbDeriv(Xl);
+    }
+
+    bool EdgeSE3ProjectTagCornerToBody::checkJacobiansNumerical(double delta,
+                                                                double tol) const
+    {
+        auto *self = const_cast<EdgeSE3ProjectTagCornerToBody *>(this);
+        double max_err = 0.0;
+        return CheckBinarySE3Jacobians(self, delta, tol, &max_err);
+    }
+
+    bool TestTagCornerEdgeJacobians(double *max_abs_err)
+    {
+        if(max_abs_err)
+            *max_abs_err = 0.0;
+
+        g2o::SparseOptimizer optimizer;
+        auto *linearSolver =
+            new g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>();
+        auto *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
+        optimizer.setAlgorithm(new g2o::OptimizationAlgorithmLevenberg(solver_ptr));
+
+        std::vector<float> cam_params = {458.654f, 457.296f, 367.215f, 248.375f};
+        std::unique_ptr<Pinhole> cam(new Pinhole(cam_params));
+
+        auto *vTag = new g2o::VertexSE3Expmap();
+        auto *vCam = new g2o::VertexSE3Expmap();
+        vTag->setId(0);
+        vCam->setId(1);
+        {
+            Eigen::Quaterniond q =
+                Eigen::AngleAxisd(0.2, Eigen::Vector3d::UnitZ()) *
+                Eigen::AngleAxisd(-0.1, Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxisd(0.05, Eigen::Vector3d::UnitX());
+            vTag->setEstimate(g2o::SE3Quat(q, Eigen::Vector3d(0.3, -0.1, 1.5)));
+        }
+        {
+            Eigen::Quaterniond q =
+                Eigen::AngleAxisd(-0.05, Eigen::Vector3d::UnitZ()) *
+                Eigen::AngleAxisd(0.15, Eigen::Vector3d::UnitY());
+            vCam->setEstimate(g2o::SE3Quat(q, Eigen::Vector3d(0.05, 0.02, 0.1)));
+        }
+        optimizer.addVertex(vTag);
+        optimizer.addVertex(vCam);
+
+        const Eigen::Vector3d Xt(-0.08, 0.08, 0.0);
+        Eigen::Vector2d z =
+            cam->project(vCam->estimate().map(vTag->estimate().map(Xt)));
+        z += Eigen::Vector2d(0.7, -0.4);
+
+        auto *e = new EdgeSE3ProjectTagCorner();
+        e->setVertex(0, vTag);
+        e->setVertex(1, vCam);
+        e->setMeasurement(z);
+        e->setInformation(Eigen::Matrix2d::Identity());
+        e->X_t = Xt;
+        e->pCamera = cam.get();
+        optimizer.addEdge(e);
+
+        double err = 0.0;
+        if(!CheckBinarySE3Jacobians(e, 1e-8, 1e-5, &err))
+        {
+            std::cerr << "[TagCornerJac] left edge failed, max_abs_err=" << err
+                      << std::endl;
+            if(max_abs_err)
+                *max_abs_err = err;
+            return false;
+        }
+
+        g2o::SE3Quat Trl(Eigen::Quaterniond::Identity(),
+                         Eigen::Vector3d(-0.12, 0.0, 0.0));
+        Eigen::Vector2d zr =
+            cam->project((Trl * vCam->estimate()).map(vTag->estimate().map(Xt)));
+        zr += Eigen::Vector2d(-0.5, 0.3);
+
+        auto *eBody = new EdgeSE3ProjectTagCornerToBody();
+        eBody->setVertex(0, vTag);
+        eBody->setVertex(1, vCam);
+        eBody->setMeasurement(zr);
+        eBody->setInformation(Eigen::Matrix2d::Identity());
+        eBody->X_t = Xt;
+        eBody->pCamera = cam.get();
+        eBody->mTrl = Trl;
+        optimizer.addEdge(eBody);
+
+        double err_body = 0.0;
+        if(!CheckBinarySE3Jacobians(eBody, 1e-8, 1e-5, &err_body))
+        {
+            std::cerr << "[TagCornerJac] body edge failed, max_abs_err="
+                      << err_body << std::endl;
+            if(max_abs_err)
+                *max_abs_err = std::max(err, err_body);
+            return false;
+        }
+
+        if(max_abs_err)
+            *max_abs_err = std::max(err, err_body);
+        return true;
     }
 
 }

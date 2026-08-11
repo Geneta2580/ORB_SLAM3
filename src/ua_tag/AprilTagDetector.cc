@@ -678,16 +678,18 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
                              GeometricCamera *cam_target,
                              double tag_size,
                              double tau_rho,
-                             const char *direction_label)
+                             const char *direction_label,
+                             bool log_fail)
 {
     if(!cam_target || tag_size <= 0.0)
         return false;
-    if(source_obs.is_outlier || source_obs.tag_id < 0)
+    if(!source_obs.IsDetectValid())
         return false;
     if(!source_obs.pose_estimate.has_value())
         return false;
 
     tag::TagPoseEstimate &est = *source_obs.pose_estimate;
+    // 已消歧：直接返回，不重复打 fail 日志
     if(est.selected_candidate >= 0)
         return false;
     if(!est.candidates[0].valid || !est.candidates[1].valid)
@@ -757,26 +759,33 @@ bool CrossReprojDisambiguate(tag::TagObservation &source_obs,
 
     if(!(rho > tau_rho) || !std::isfinite(rho))
     {
-        std::cout << "[TagStereo] fail tag_id=" << source_obs.tag_id
-                  << " dir=" << direction_label
-                  << " reason=stereo_ratio_weak"
-                  << " e0=" << e[0] << " e1=" << e[1]
-                  << " rho=" << rho << " tau=" << tau_rho
-                  << " mono_ratio=" << est.ambiguity_ratio
-                  << std::endl;
+        // 仅对尚未消歧的观测打印；同 ID 另一目已消歧时由调用方关闭 log_fail
+        if(log_fail && est.selected_candidate < 0)
+        {
+            std::cout << "[TagStereo] fail tag_id=" << source_obs.tag_id
+                      << " dir=" << direction_label
+                      << " reason=stereo_ratio_weak"
+                      << " e0=" << e[0] << " e1=" << e[1]
+                      << " rho=" << rho << " tau=" << tau_rho
+                      << " mono_ratio=" << est.ambiguity_ratio
+                      << std::endl;
+        }
         return false;
     }
 
     est.selected_candidate = i_better;
     est.ambiguity_ratio = static_cast<float>(rho);
 
-    std::cout << "[TagStereo] ok tag_id=" << source_obs.tag_id
-              << " dir=" << direction_label
-              << " selected=" << i_better
-              << " e_better=" << e_better
-              << " e_worse=" << e_worse
-              << " stereo_ratio=" << rho
-              << std::endl;
+    if(log_fail)  // CrossReproj 用 log_fail 兼控 ok；调用方已合入“是否值得打印”
+    {
+        std::cout << "[TagStereo] ok tag_id=" << source_obs.tag_id
+                  << " dir=" << direction_label
+                  << " selected=" << i_better
+                  << " e_better=" << e_better
+                  << " e_worse=" << e_worse
+                  << " stereo_ratio=" << rho
+                  << std::endl;
+    }
     return true;
 }
 
@@ -788,21 +797,27 @@ bool DisambiguateWithStereo(tag::TagObservation &left_obs,
                             GeometricCamera *cam_left,
                             GeometricCamera *cam_right,
                             double tag_size,
-                            double tau_rho)
+                            double tau_rho,
+                            bool log_stereo)
 {
     if(!cam_left || !cam_right || tag_size <= 0.0)
         return false;
-    if(left_obs.is_outlier || right_obs.is_outlier)
+    if(!left_obs.IsDetectValid() || !right_obs.IsDetectValid())
         return false;
     if(left_obs.tag_id < 0 || left_obs.tag_id != right_obs.tag_id)
         return false;
+
+    // 任一相机已消歧，或调用方关闭日志（如 Tag 已入图）：不刷 stereo fail/ok
+    const bool any_resolved =
+        left_obs.IsAmbiguityResolved() || right_obs.IsAmbiguityResolved();
+    const bool log_fail = log_stereo && !any_resolved;
 
     // 1) L→R：消歧左目（P_right = T_rl * P_left）
     if(!left_obs.IsAmbiguityResolved() && left_obs.pose_estimate.has_value())
     {
         if(CrossReprojDisambiguate(left_obs, right_obs.corners_raw,
                                    T_lr.inverse(), cam_right, tag_size, tau_rho,
-                                   "L2R"))
+                                   "L2R", log_fail))
             return true;
     }
 
@@ -810,7 +825,8 @@ bool DisambiguateWithStereo(tag::TagObservation &left_obs,
     if(!right_obs.IsAmbiguityResolved() && right_obs.pose_estimate.has_value())
     {
         if(CrossReprojDisambiguate(right_obs, left_obs.corners_raw, T_lr,
-                                   cam_left, tag_size, tau_rho, "R2L"))
+                                   cam_left, tag_size, tau_rho, "R2L",
+                                   log_fail))
             return true;
     }
 

@@ -68,6 +68,19 @@ void LocalMapping::SetLoopCloser(LoopClosing* pLoopCloser)
     mpLoopCloser = pLoopCloser;
 }
 
+void LocalMapping::SetTagLocalBAParams(const tag::TagLocalBAParams &params)
+{
+    mTagLocalBAParams = params;
+    if(mTagLocalBAParams.enable)
+    {
+        std::cout << "Tag LocalBA enabled"
+                  << " (optimize_active=" << (mTagLocalBAParams.optimize_active ? 1 : 0)
+                  << ", corner_sigma=" << mTagLocalBAParams.corner_sigma
+                  << ", min_inlier_corners=" << mTagLocalBAParams.min_inlier_corners
+                  << ")" << std::endl;
+    }
+}
+
 void LocalMapping::SetTracker(Tracking *pTracker)
 {
     mpTracker=pTracker;
@@ -163,7 +176,9 @@ void LocalMapping::Run()
                     }
                     else
                     {
-                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA);
+                        tag::TagLocalBAStats tagLbaStats;
+                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA,
+                                                         mTagLocalBAParams, &tagLbaStats);
                         b_doneLBA = true;
                     }
 
@@ -398,7 +413,8 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
                       << " cam=" << cam_src
                       << " left_idx=" << leftIndex
                       << " right_idx=" << rightIndex
-                      << " outlier=" << (obs->is_outlier ? 1 : 0)
+                      << " detect_outlier=" << (obs->is_detect_outlier ? 1 : 0)
+                      << " opt_outlier=" << (obs->is_opt_outlier ? 1 : 0)
                       << std::endl;
             return false;
         }
@@ -438,12 +454,15 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
             obs->camera_id, sel->T_ct, pKF->GetRelativePoseTlr());
         // T_wt = Twc * T_cL_t（左目锚定）
         pTag->SetPose(pKF->GetPoseInverse() * T_cL_t);
+        // 已消歧的单帧初值：直接 ACTIVE，可进 LBA / PoseOpt（勿停在 CANDIDATE）
+        pTag->SetState(tag::MapTagState::ACTIVE);
 
         const Eigen::Vector3f tw = pTag->GetPose().translation();
         std::cout << "[TagLM] InitializeMapTagPose ok"
                   << " tag_id=" << tag_id
                   << " kf_id=" << pKF->mnId
                   << " cam=" << cam_src
+                  << " state=ACTIVE"
                   << " selected=" << obs->pose_estimate->selected_candidate
                   << " reproj_err=" << sel->reprojection_error
                   << " t_w=[" << tw.x() << ", " << tw.y() << ", " << tw.z() << "]"
@@ -499,11 +518,11 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     auto pickMeasurableObs = [](KeyFrame *pKF, int tid) -> const tag::TagObservation * {
         const tag::TagObservation *left =
             pKF->mTagFrameData.Find(tid, tag::CameraId::LEFT_OR_MONO);
-        if(left && !left->is_outlier)
+        if(left && left->IsDetectValid())
             return left;
         const tag::TagObservation *right =
             pKF->mTagFrameData.Find(tid, tag::CameraId::RIGHT);
-        if(right && !right->is_outlier)
+        if(right && right->IsDetectValid())
             return right;
         return nullptr;
     };
@@ -798,14 +817,14 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
     for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.left.size()); ++i)
     {
         const tag::TagObservation &obs = pKF->mTagFrameData.left[i];
-        if(obs.is_outlier || obs.tag_id < 0)
+        if(!obs.IsDetectValid())
             continue;
         pending[obs.tag_id].leftIndex = i;
     }
     for(int i = 0; i < static_cast<int>(pKF->mTagFrameData.right.size()); ++i)
     {
         const tag::TagObservation &obs = pKF->mTagFrameData.right[i];
-        if(obs.is_outlier || obs.tag_id < 0)
+        if(!obs.IsDetectValid())
             continue;
         pending[obs.tag_id].rightIndex = i;
     }
@@ -856,8 +875,14 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
             {
                 created = true;
                 tag_map_updated = true;
+                const char *st_name =
+                    pTag->GetState() == tag::MapTagState::ACTIVE ? "ACTIVE"
+                    : pTag->GetState() == tag::MapTagState::FIXED_ANCHOR
+                          ? "FIXED_ANCHOR"
+                          : "CANDIDATE";
                 std::cout << "[TagLM] created MapTag id=" << tag_id
-                          << " as CANDIDATE from kf_id=" << pKF->mnId
+                          << " as " << st_name
+                          << " from kf_id=" << pKF->mnId
                           << " has_pose=" << (pTag->HasPose() ? 1 : 0)
                           << std::endl;
             }
@@ -873,13 +898,26 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
             continue;
         }
 
-        // 仍无 pose 的 CANDIDATE：先试当前帧单目消歧；失败则多帧联合消歧
-        if(pTag->GetState() == tag::MapTagState::CANDIDATE && !pTag->HasPose())
+        // CANDIDATE：无 pose → 单帧消歧初值（成功即 ACTIVE）或多帧消歧；
+        // 已有 pose 却仍为 CANDIDATE（旧逻辑残留）→ 直接晋升 ACTIVE
+        if(pTag->GetState() == tag::MapTagState::CANDIDATE)
         {
-            if(!created)
-                InitializeMapTagPose(pTag.get(), pKF, left_idx, right_idx);
             if(!pTag->HasPose())
-                TryResolveMapTagAmbiguityMultiFrame(pTag.get());
+            {
+                if(!created)
+                    InitializeMapTagPose(pTag.get(), pKF, left_idx, right_idx);
+                if(!pTag->HasPose())
+                    TryResolveMapTagAmbiguityMultiFrame(pTag.get());
+            }
+            else if(!pTag->IsFixed())
+            {
+                pTag->SetState(tag::MapTagState::ACTIVE);
+                std::cout << "[TagLM] promote CANDIDATE→ACTIVE"
+                          << " tag_id=" << tag_id
+                          << " kf_id=" << pKF->mnId
+                          << " reason=has_unambiguous_pose"
+                          << std::endl;
+            }
         }
 
         if(pTag->HasPose() && (!had_pose_before || created))

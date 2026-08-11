@@ -65,6 +65,14 @@ void TagFrameData::Clear()
     right.clear();
 }
 
+void TagFrameData::ResetOptOutliers()
+{
+    for(TagObservation &obs : left)
+        obs.ResetOptOutliers();
+    for(TagObservation &obs : right)
+        obs.ResetOptOutliers();
+}
+
 bool TagFrameData::Empty() const noexcept
 {
     return left.empty() && right.empty();

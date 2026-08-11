@@ -72,7 +72,27 @@ struct TagObservation
     // nullopt: 尚未估计；有值: 已计算候选（未必已消歧）
     std::optional<TagPoseEstimate> pose_estimate;
 
-    bool is_outlier = false;
+    // 检测阶段永久无效（坏检测等）；快照/消歧/建图均看此标志
+    bool is_detect_outlier = false;
+
+    // 最近一次位姿优化的组级外点（临时）；同帧下一次 PoseOptimization 前必须 Reset
+    bool is_opt_outlier = false;
+
+    // 角点级优化外点（PoseOptimization / TagOptimizer 写入；默认全内点）
+    std::array<bool, 4> corner_outliers{{false, false, false, false}};
+
+    // 检测有效：可用于消歧、建图、构建联合优化快照（忽略优化外点）
+    bool IsDetectValid() const noexcept
+    {
+        return tag_id >= 0 && !is_detect_outlier;
+    }
+
+    // 清除优化产生的临时外点（不影响 is_detect_outlier）
+    void ResetOptOutliers() noexcept
+    {
+        is_opt_outlier = false;
+        corner_outliers = {{false, false, false, false}};
+    }
 
     // 是否已消除 IPPE 二义性
     bool IsAmbiguityResolved() const noexcept

@@ -338,9 +338,26 @@ void Viewer::Run()
         cv::Mat toShow;
         cv::Mat im = mpFrameDrawer->DrawFrame(trackedImageScale);
 
+        // 以 FrameDrawer::both 为准（PinHole+Tag 叠加时在 Tracking 中置 true）
+        both = mpFrameDrawer->both;
         if(both){
             cv::Mat imRight = mpFrameDrawer->DrawRightFrame(trackedImageScale);
-            cv::hconcat(im,imRight,toShow);
+            if(!im.empty() && !imRight.empty() && im.rows == imRight.rows)
+                cv::hconcat(im, imRight, toShow);
+            else if(!im.empty() && !imRight.empty())
+            {
+                // DrawTextInfo 后偶发高度不一致时对齐再拼接
+                const int h = std::max(im.rows, imRight.rows);
+                if(im.rows != h)
+                    cv::copyMakeBorder(im, im, 0, h - im.rows, 0, 0, cv::BORDER_CONSTANT);
+                if(imRight.rows != h)
+                    cv::copyMakeBorder(imRight, imRight, 0, h - imRight.rows, 0, 0,
+                                       cv::BORDER_CONSTANT);
+                cv::hconcat(im, imRight, toShow);
+            }
+            else{
+                toShow = im;
+            }
         }
         else{
             toShow = im;

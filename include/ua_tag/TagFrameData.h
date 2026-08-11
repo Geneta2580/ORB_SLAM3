@@ -30,6 +30,9 @@ public:
 
     void Clear();
 
+    // 重置本帧所有 Tag 观测的优化外点（同帧多次 PoseOptimization 前调用）
+    void ResetOptOutliers();
+
     bool Empty() const noexcept;
     std::size_t Size() const noexcept;
 };

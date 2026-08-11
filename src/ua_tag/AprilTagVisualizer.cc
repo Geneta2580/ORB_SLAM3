@@ -16,7 +16,8 @@ namespace ua_tag
 namespace
 {
 
-void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags)
+void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags,
+                      float imageScale = 1.f)
 {
     const cv::Scalar edgeColors[4] = {
         cv::Scalar(0, 255, 0),    // 0->1 green
@@ -24,21 +25,26 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags)
         cv::Scalar(0, 128, 255),  // 2->3 orange
         cv::Scalar(255, 0, 0)     // 3->0 blue
     };
+    const float invScale = (imageScale != 1.f && imageScale > 0.f) ? (1.f / imageScale) : 1.f;
 
     for(size_t i = 0; i < tags.size(); ++i)
     {
         const tag::TagObservation &tag = tags[i];
+        cv::Point2f corners[4];
+        for(int k = 0; k < 4; ++k)
+            corners[k] = tag.corners_raw[k] * invScale;
+
         for(int k = 0; k < 4; ++k)
         {
-            const cv::Point2f &p0 = tag.corners_raw[k];
-            const cv::Point2f &p1 = tag.corners_raw[(k + 1) % 4];
+            const cv::Point2f &p0 = corners[k];
+            const cv::Point2f &p1 = corners[(k + 1) % 4];
             cv::line(vis, p0, p1, edgeColors[k], 2, cv::LINE_AA);
             cv::circle(vis, p0, 3, edgeColors[k], -1, cv::LINE_AA);
         }
 
         cv::Point2f center(0.f, 0.f);
         for(int k = 0; k < 4; ++k)
-            center += tag.corners_raw[k];
+            center += corners[k];
         center *= 0.25f;
 
         // v: 位姿有效；a: 歧义已消解
@@ -54,7 +60,8 @@ void DrawObservations(cv::Mat &vis, const tag::TagFrameData::Observations &tags)
         std::snprintf(line1, sizeof(line1), "id:%d", tag.tag_id);
         std::snprintf(line2, sizeof(line2), "v:%d a:%d", valid, amb_resolved);
 
-        const cv::Scalar textColor = valid ? cv::Scalar(0, 220, 0) : cv::Scalar(0, 0, 255);
+        // 有效：蓝；无效：红（BGR）
+        const cv::Scalar textColor = valid ? cv::Scalar(255, 64, 0) : cv::Scalar(0, 0, 255);
         cv::putText(vis, line1, center + cv::Point2f(4.f, -8.f),
                     cv::FONT_HERSHEY_SIMPLEX, 0.55, textColor, 2, cv::LINE_AA);
         cv::putText(vis, line2, center + cv::Point2f(4.f, 10.f),
@@ -113,6 +120,17 @@ cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
     else
         DrawObservations(vis, frame_data.left);
     return vis;
+}
+
+void OverlayTags(cv::Mat &image, const tag::TagFrameData &frame_data,
+                 tag::CameraId camera_id, float imageScale)
+{
+    if(image.empty())
+        return;
+    if(camera_id == tag::CameraId::RIGHT)
+        DrawObservations(image, frame_data.right, imageScale);
+    else
+        DrawObservations(image, frame_data.left, imageScale);
 }
 
 cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,

@@ -35,6 +35,7 @@
 #ifdef HAS_APRILTAG
 #include "ua_tag/AprilTagDetector.h"
 #include "ua_tag/AprilTagVisualizer.h"
+#include "ua_tag/MapTagData.h"
 #include "ua_tag/TagViewer.h"
 #endif
 
@@ -146,6 +147,15 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 #endif
     mpTagInitializer = new tag::TagInitializer(strSettingPath);
     mpTagTracker = new tag::TagTracker(strSettingPath);
+    mTagPoseOptParams = tag::TagPoseOptParams::FromSettings(strSettingPath);
+    if(mTagPoseOptParams.enable)
+    {
+        std::cout << "Tag joint PoseOptimization enabled"
+                  << " (corner_sigma=" << mTagPoseOptParams.corner_sigma
+                  << ", min_inlier_corners=" << mTagPoseOptParams.min_inlier_corners
+                  << ", fixed_only=" << (mTagPoseOptParams.fixed_only ? 1 : 0)
+                  << ")" << std::endl;
+    }
 
     {
         cv::FileStorage fsOnlinePose(strSettingPath, cv::FileStorage::READ);
@@ -179,11 +189,33 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     {
         cv::FileStorage fsTagViewer(strSettingPath, cv::FileStorage::READ);
         int enable_tag_viewer = 0;
+        int enable_save_vis = 0;
+        int enable_show_orb = 0;
         if(fsTagViewer.isOpened())
         {
             cv::FileNode node = fsTagViewer["Tag.viewer"];
             if(!node.empty())
                 enable_tag_viewer = static_cast<int>(node);
+            node = fsTagViewer["Tag.save_vis"];
+            if(!node.empty())
+                enable_save_vis = static_cast<int>(node);
+            node = fsTagViewer["Tag.save_vis_dir"];
+            if(!node.empty() && node.isString())
+                mTagSaveVisDir = static_cast<std::string>(node);
+            node = fsTagViewer["Tag.show_in_orb_viewer"];
+            if(!node.empty())
+                enable_show_orb = static_cast<int>(node);
+        }
+        mbTagSaveVis = (enable_save_vis != 0);
+        mbTagShowInOrbViewer = (enable_show_orb != 0);
+        if(mbTagSaveVis)
+            std::cout << "Tag save_vis enabled -> " << mTagSaveVisDir << std::endl;
+        if(mbTagShowInOrbViewer)
+        {
+            std::cout << "Tag overlay on ORB Current Frame enabled" << std::endl;
+            // PinHole 双目默认 only left；开叠加时并排显示左右图以便看右目 Tag
+            if(mSensor == System::STEREO || mSensor == System::IMU_STEREO)
+                mpFrameDrawer->both = true;
         }
         if(enable_tag_viewer != 0)
         {
@@ -700,8 +732,8 @@ void Tracking::newParameterLoader(Settings *settings) {
         mpCamera2 = settings->camera2();
         mpCamera2 = mpAtlas->AddCamera(mpCamera2);
 
-        if(settings->cameraType() != Settings::Rectified)
-            mTlr = settings->Tlr();
+        // PinHole：T_c1_c2；Rectified：Settings 已用 Stereo.b 填 Tlr（+X 基线）
+        mTlr = settings->Tlr();
 
         if(settings->cameraType() == Settings::KannalaBrandt)
             mpFrameDrawer->both = true;
@@ -1594,6 +1626,9 @@ void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
 void Tracking::SetViewer(Viewer *pViewer)
 {
     mpViewer=pViewer;
+    // System 创建 Viewer 线程后才调用此处；同步双目图像窗开关
+    if(mpViewer && mpFrameDrawer)
+        mpViewer->both = mpFrameDrawer->both;
 }
 
 void Tracking::SetStepByStep(bool bSet)
@@ -1613,7 +1648,6 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
     //cout << "GrabImageStereo" << endl;
 
     mImGray = imRectLeft;
-    cv::Mat imGrayRight = imRectRight;
     mImRight = imRectRight;
 
     if(mImGray.channels()==3)
@@ -1622,12 +1656,12 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
         if(mbRGB)
         {
             cvtColor(mImGray,mImGray,cv::COLOR_RGB2GRAY);
-            cvtColor(imGrayRight,imGrayRight,cv::COLOR_RGB2GRAY);
+            cvtColor(mImRight,mImRight,cv::COLOR_RGB2GRAY);
         }
         else
         {
             cvtColor(mImGray,mImGray,cv::COLOR_BGR2GRAY);
-            cvtColor(imGrayRight,imGrayRight,cv::COLOR_BGR2GRAY);
+            cvtColor(mImRight,mImRight,cv::COLOR_BGR2GRAY);
         }
     }
     else if(mImGray.channels()==4)
@@ -1636,14 +1670,16 @@ Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat 
         if(mbRGB)
         {
             cvtColor(mImGray,mImGray,cv::COLOR_RGBA2GRAY);
-            cvtColor(imGrayRight,imGrayRight,cv::COLOR_RGBA2GRAY);
+            cvtColor(mImRight,mImRight,cv::COLOR_RGBA2GRAY);
         }
         else
         {
             cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
-            cvtColor(imGrayRight,imGrayRight,cv::COLOR_BGRA2GRAY);
+            cvtColor(mImRight,mImRight,cv::COLOR_BGRA2GRAY);
         }
     }
+
+    cv::Mat imGrayRight = mImRight;
 
     //cout << "Incoming frame creation" << endl;
 
@@ -2023,56 +2059,67 @@ void Tracking::EstimateAndVisualizeTagPoses()
             mpAprilTagDetector->EstimatePose(obs, camera_right, nullptr);
         mpAprilTagDetector->SetGeometricCamera(mpCamera);
 
-        // 暂时屏蔽双目交叉重投影消歧（保留实现，不删除）
         // 交叉重投影消歧：同 ID 左右观测成对，先 L→R 再必要时 R→L
+        // 仅地图中已 ACTIVE 的 Tag 静默；CANDIDATE / 未入图仍打印 [TagStereo]
         std::unordered_map<int, tag::TagObservation *> right_by_id;
         right_by_id.reserve(mCurrentFrame.mTagFrameData.right.size());
         for(tag::TagObservation &obs : mCurrentFrame.mTagFrameData.right)
         {
-            if(obs.is_outlier || obs.tag_id < 0)
+            if(!obs.IsDetectValid())
                 continue;
             right_by_id.emplace(obs.tag_id, &obs);
         }
-        
+
+        Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
         const double tag_size = mpAprilTagDetector->GetConfig().tag_size;
         const Sophus::SE3f T_lr = mCurrentFrame.GetRelativePoseTlr();
         for(tag::TagObservation &left_obs : mCurrentFrame.mTagFrameData.left)
         {
-            if(left_obs.is_outlier || left_obs.tag_id < 0)
+            if(!left_obs.IsDetectValid())
                 continue;
             if(left_obs.IsAmbiguityResolved())
                 continue;
-        
+
             auto it = right_by_id.find(left_obs.tag_id);
             if(it == right_by_id.end())
                 continue;
-        
+
+            bool log_stereo = true;
+            if(pMap)
+            {
+                const Map::MapTagPtr pTag = pMap->GetMapTag(left_obs.tag_id);
+                if(pTag && pTag->GetState() == tag::MapTagState::ACTIVE)
+                    log_stereo = false;
+            }
             ua_tag::DisambiguateWithStereo(
-                left_obs, *it->second, T_lr, mpCamera, mpCamera2, tag_size, 3.0);
+                left_obs, *it->second, T_lr, mpCamera, mpCamera2, tag_size, 3.0,
+                log_stereo);
         }
     }
 
-    // 可视化：双目左右检测帧并排；单目仅左目
-    const cv::Mat &imLeftVis = mCurrentFrame.mImTagDetect.empty()
-                                   ? mImGray
-                                   : mCurrentFrame.mImTagDetect;
-    const cv::Mat &imRightVis = mCurrentFrame.mImTagDetectRight.empty()
-                                    ? mImRight
-                                    : mCurrentFrame.mImTagDetectRight;
-    const std::string tagVisDir = "tag_vis";
-    if(ua_tag::EnsureDir(tagVisDir))
+    // 可选存盘：Tag.save_vis=1 时写 tag_vis/frame_XXXXXX.png
+    if(mbTagSaveVis)
     {
-        char visName[64];
-        std::snprintf(visName, sizeof(visName), "frame_%06lu.png", mCurrentFrame.mnId);
-        const std::string visPath = tagVisDir + "/" + visName;
-        const bool is_stereo =
-            (mSensor == System::STEREO || mSensor == System::IMU_STEREO) &&
-            !imRightVis.empty();
-        if(is_stereo)
-            ua_tag::SaveTagsVis(imLeftVis, imRightVis, mCurrentFrame.mTagFrameData,
-                                visPath);
-        else
-            ua_tag::SaveTagsVis(imLeftVis, mCurrentFrame.mTagFrameData, visPath);
+        const cv::Mat &imLeftVis = mCurrentFrame.mImTagDetect.empty()
+                                       ? mImGray
+                                       : mCurrentFrame.mImTagDetect;
+        const cv::Mat &imRightVis = mCurrentFrame.mImTagDetectRight.empty()
+                                        ? mImRight
+                                        : mCurrentFrame.mImTagDetectRight;
+        if(ua_tag::EnsureDir(mTagSaveVisDir))
+        {
+            char visName[64];
+            std::snprintf(visName, sizeof(visName), "frame_%06lu.png", mCurrentFrame.mnId);
+            const std::string visPath = mTagSaveVisDir + "/" + visName;
+            const bool is_stereo =
+                (mSensor == System::STEREO || mSensor == System::IMU_STEREO) &&
+                !imRightVis.empty();
+            if(is_stereo)
+                ua_tag::SaveTagsVis(imLeftVis, imRightVis, mCurrentFrame.mTagFrameData,
+                                    visPath);
+            else
+                ua_tag::SaveTagsVis(imLeftVis, mCurrentFrame.mTagFrameData, visPath);
+        }
     }
 #endif
 }
@@ -2093,6 +2140,18 @@ void Tracking::TagTrack()
 
     EstimateAndVisualizeTagPoses();
 #endif
+}
+
+int Tracking::OptimizeCurrentPose(bool useTags)
+{
+    if(useTags && mTagPoseOptParams.enable)
+    {
+        Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+        const auto tagSnap =
+            tag::BuildTagMapSnapshot(pMap, &mCurrentFrame, mTagPoseOptParams);
+        return Optimizer::PoseOptimization(&mCurrentFrame, tagSnap, mTagPoseOptParams);
+    }
+    return Optimizer::PoseOptimization(&mCurrentFrame);
 }
 
 void Tracking::Track()
@@ -3102,7 +3161,7 @@ bool Tracking::TrackReferenceKeyFrame()
 
 
     // cout << " TrackReferenceKeyFrame mLastFrame.mTcw:  " << mLastFrame.mTcw << endl;
-    Optimizer::PoseOptimization(&mCurrentFrame);
+    OptimizeCurrentPose(true);
 
     // Discard outliers
     int nmatchesMap = 0;
@@ -3265,8 +3324,8 @@ bool Tracking::TrackWithMotionModel()
             return false;
     }
 
-    // Optimize frame pose with all matches
-    Optimizer::PoseOptimization(&mCurrentFrame);
+    // Optimize frame pose with all matches（含 Tag 联合约束）
+    OptimizeCurrentPose(true);
 
     // Discard outliers
     int nmatchesMap = 0;
@@ -3328,13 +3387,17 @@ bool Tracking::TrackLocalMap()
 
     int inliers;
     if (!mpAtlas->isImuInitialized())
-        Optimizer::PoseOptimization(&mCurrentFrame);
+    {
+        // 非惯性：TrackLocalMap 与前两阶段共用 OptimizeCurrentPose(Tag)
+        OptimizeCurrentPose(true);
+    }
     else
     {
         if(mCurrentFrame.mnId<=mnLastRelocFrameId+mnFramesToResetIMU)
         {
             Verbose::PrintMess("TLM: PoseOptimization ", Verbose::VERBOSITY_DEBUG);
-            Optimizer::PoseOptimization(&mCurrentFrame);
+            // IMU 重置窗口：暂不接 Tag（与惯性路径一致）
+            OptimizeCurrentPose(false);
         }
         else
         {
@@ -3551,7 +3614,7 @@ bool Tracking::NeedNewKeyFrame()
     {
         std::vector<int> new_tag_ids;
         auto collectNewTag = [&](const tag::TagObservation &obs) {
-            if(obs.is_outlier || pMap->HasMapTag(obs.tag_id))
+            if(!obs.IsDetectValid() || pMap->HasMapTag(obs.tag_id))
                 return;
             if(std::find(new_tag_ids.begin(), new_tag_ids.end(), obs.tag_id) ==
                new_tag_ids.end())

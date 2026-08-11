@@ -362,6 +362,8 @@ namespace ORB_SLAM3 {
         if(cameraType_ == Rectified){
             b_ = readParameter<float>(fSettings,"Stereo.b",found);
             bf_ = b_ * calibration1_->getParameter(0);
+            // Rectified：P_left = T_lr * P_right，T_lr 为沿 +X 的基线平移
+            Tlr_ = Sophus::SE3f(Sophus::SO3f(), Eigen::Vector3f(b_, 0.f, 0.f));
         }
         else{
             cv::Mat cvTlr = readParameter<cv::Mat>(fSettings,"Stereo.T_c1_c2",found);

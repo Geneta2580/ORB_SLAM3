@@ -15,6 +15,11 @@ namespace ua_tag
 cv::Mat DrawTags(const cv::Mat &image, const tag::TagFrameData &frame_data,
                  tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO);
 
+// 在已有 BGR 图上叠加 Tag（imageScale 与 FrameDrawer 一致：角点坐标除以 scale）
+void OverlayTags(cv::Mat &image, const tag::TagFrameData &frame_data,
+                 tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO,
+                 float imageScale = 1.f);
+
 // 左右目分别绘制后水平拼接（同步并列可视化）
 cv::Mat DrawTagsStereo(const cv::Mat &imLeft, const cv::Mat &imRight,
                        const tag::TagFrameData &frame_data);

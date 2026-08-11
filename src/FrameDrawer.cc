@@ -19,6 +19,10 @@
 #include "FrameDrawer.h"
 #include "Tracking.h"
 
+#ifdef HAS_APRILTAG
+#include "ua_tag/AprilTagVisualizer.h"
+#endif
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -27,7 +31,7 @@
 namespace ORB_SLAM3
 {
 
-FrameDrawer::FrameDrawer(Atlas* pAtlas):both(false),mpAtlas(pAtlas)
+FrameDrawer::FrameDrawer(Atlas* pAtlas):both(false),mpAtlas(pAtlas),mbDrawTags(false),mbFisheyeStereo(false)
 {
     mState=Tracking::SYSTEM_NOT_READY;
     mIm = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
@@ -54,6 +58,8 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
     vector<MapPoint*> vpOutlierMPs;
     map<long unsigned int, cv::Point2f> mProjectPoints;
     map<long unsigned int, cv::Point2f> mMatchedInImage;
+    bool bDrawTags = false;
+    tag::TagFrameData tagFrameData;
 
     cv::Scalar standardColor(0,255,0);
     cv::Scalar odometryColor(255,0,0);
@@ -66,6 +72,9 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
             mState=Tracking::NO_IMAGES_YET;
 
         mIm.copyTo(im);
+        bDrawTags = mbDrawTags;
+        if(bDrawTags)
+            tagFrameData = mTagFrameData;
 
         if(mState==Tracking::NOT_INITIALIZED)
         {
@@ -195,6 +204,15 @@ cv::Mat FrameDrawer::DrawFrame(float imageScale)
         }
     }
 
+#ifdef HAS_APRILTAG
+    if(bDrawTags)
+        ua_tag::OverlayTags(im, tagFrameData, tag::CameraId::LEFT_OR_MONO, imageScale);
+#endif
+
+    if(both)
+        cv::putText(im, "L", cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                    cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
+
     cv::Mat imWithInfo;
     DrawTextInfo(im,state, imWithInfo);
 
@@ -209,6 +227,11 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
     vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
     int state; // Tracking state
+    bool bDrawTags = false;
+    bool bFisheyeStereo = false;
+    tag::TagFrameData tagFrameData;
+    vector<cv::KeyPoint> vLeftKeys;
+    vector<float> vuRight;
 
     //Copy variables within scoped mutex
     {
@@ -218,6 +241,10 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
             mState=Tracking::NO_IMAGES_YET;
 
         mImRight.copyTo(im);
+        bDrawTags = mbDrawTags;
+        bFisheyeStereo = mbFisheyeStereo;
+        if(bDrawTags)
+            tagFrameData = mTagFrameData;
 
         if(mState==Tracking::NOT_INITIALIZED)
         {
@@ -228,8 +255,10 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
         else if(mState==Tracking::OK)
         {
             vCurrentKeys = mvCurrentKeysRight;
+            vLeftKeys = mvCurrentKeys;
             vbVO = mvbVO;
             vbMap = mvbMap;
+            vuRight = mvuRight;
         }
         else if(mState==Tracking::LOST)
         {
@@ -272,53 +301,104 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     }
     else if(state==Tracking::OK) //TRACKING
     {
-        mnTracked=0;
-        mnTrackedVO=0;
         const float r = 5;
-        const int n = mvCurrentKeysRight.size();
-        const int Nleft = mvCurrentKeys.size();
+        const cv::Scalar mapColor(0,255,0);
+        const cv::Scalar voColor(255,0,0);
 
-        for(int i=0;i<n;i++)
+        if(bFisheyeStereo && !vbVO.empty() && !vbMap.empty())
         {
-            if(vbVO[i + Nleft] || vbMap[i + Nleft])
-            {
-                cv::Point2f pt1,pt2;
-                cv::Point2f point;
-                if(imageScale != 1.f)
-                {
-                    point = mvCurrentKeysRight[i].pt / imageScale;
-                    float px = mvCurrentKeysRight[i].pt.x / imageScale;
-                    float py = mvCurrentKeysRight[i].pt.y / imageScale;
-                    pt1.x=px-r;
-                    pt1.y=py-r;
-                    pt2.x=px+r;
-                    pt2.y=py+r;
-                }
-                else
-                {
-                    point = mvCurrentKeysRight[i].pt;
-                    pt1.x=mvCurrentKeysRight[i].pt.x-r;
-                    pt1.y=mvCurrentKeysRight[i].pt.y-r;
-                    pt2.x=mvCurrentKeysRight[i].pt.x+r;
-                    pt2.y=mvCurrentKeysRight[i].pt.y+r;
-                }
+            // 鱼眼双目：右目特征有独立 MapPoint 槽位
+            mnTracked=0;
+            mnTrackedVO=0;
+            const int n = static_cast<int>(vCurrentKeys.size());
+            const int Nleft = static_cast<int>(vLeftKeys.size());
 
-                // This is a match to a MapPoint in the map
-                if(vbMap[i + Nleft])
+            for(int i=0;i<n;i++)
+            {
+                const int idx = i + Nleft;
+                if(idx >= static_cast<int>(vbVO.size()) || idx >= static_cast<int>(vbMap.size()))
+                    break;
+                if(vbVO[idx] || vbMap[idx])
                 {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-                    cv::circle(im,point,2,cv::Scalar(0,255,0),-1);
-                    mnTracked++;
-                }
-                else // This is match to a "visual odometry" MapPoint created in the last frame
-                {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
-                    cv::circle(im,point,2,cv::Scalar(255,0,0),-1);
-                    mnTrackedVO++;
+                    cv::Point2f pt1,pt2;
+                    cv::Point2f point;
+                    if(imageScale != 1.f)
+                    {
+                        point = vCurrentKeys[i].pt / imageScale;
+                        float px = vCurrentKeys[i].pt.x / imageScale;
+                        float py = vCurrentKeys[i].pt.y / imageScale;
+                        pt1.x=px-r;
+                        pt1.y=py-r;
+                        pt2.x=px+r;
+                        pt2.y=py+r;
+                    }
+                    else
+                    {
+                        point = vCurrentKeys[i].pt;
+                        pt1.x=vCurrentKeys[i].pt.x-r;
+                        pt1.y=vCurrentKeys[i].pt.y-r;
+                        pt2.x=vCurrentKeys[i].pt.x+r;
+                        pt2.y=vCurrentKeys[i].pt.y+r;
+                    }
+
+                    if(vbMap[idx])
+                    {
+                        cv::rectangle(im,pt1,pt2,mapColor);
+                        cv::circle(im,point,2,mapColor,-1);
+                        mnTracked++;
+                    }
+                    else
+                    {
+                        cv::rectangle(im,pt1,pt2,voColor);
+                        cv::circle(im,point,2,voColor,-1);
+                        mnTrackedVO++;
+                    }
                 }
             }
         }
+        else if(!bFisheyeStereo)
+        {
+            // PinHole 经典双目：右目无独立 MP 槽；用左目跟踪点 + mvuRight 画立体匹配
+            // 先淡画全部右目 ORB，再高亮与左目 Map/VO 对应的立体点
+            for(size_t i = 0; i < vCurrentKeys.size(); ++i)
+            {
+                cv::Point2f point = vCurrentKeys[i].pt;
+                if(imageScale != 1.f)
+                    point *= (1.f / imageScale);
+                cv::circle(im, point, 1, cv::Scalar(180, 180, 180), -1, cv::LINE_AA);
+            }
+
+            const int nLeft = static_cast<int>(vLeftKeys.size());
+            const int nFlags = std::min(static_cast<int>(vbMap.size()),
+                                        std::min(static_cast<int>(vbVO.size()), nLeft));
+            const int nU = std::min(static_cast<int>(vuRight.size()), nFlags);
+            for(int i = 0; i < nU; ++i)
+            {
+                if(vuRight[i] < 0.f)
+                    continue;
+                if(!vbMap[i] && !vbVO[i])
+                    continue;
+
+                cv::Point2f point(vuRight[i], vLeftKeys[i].pt.y);
+                if(imageScale != 1.f)
+                    point *= (1.f / imageScale);
+
+                cv::Point2f pt1(point.x - r, point.y - r);
+                cv::Point2f pt2(point.x + r, point.y + r);
+                const cv::Scalar &color = vbMap[i] ? mapColor : voColor;
+                cv::rectangle(im, pt1, pt2, color);
+                cv::circle(im, point, 2, color, -1);
+            }
+        }
     }
+
+#ifdef HAS_APRILTAG
+    if(bDrawTags)
+        ua_tag::OverlayTags(im, tagFrameData, tag::CameraId::RIGHT, imageScale);
+#endif
+
+    cv::putText(im, "R", cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
 
     cv::Mat imWithInfo;
     DrawTextInfo(im,state, imWithInfo);
@@ -375,13 +455,27 @@ void FrameDrawer::Update(Tracking *pTracker)
     mThDepth = pTracker->mCurrentFrame.mThDepth;
     mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
 
+    mbDrawTags = pTracker->mbTagShowInOrbViewer;
+    if(mbDrawTags)
+        mTagFrameData = pTracker->mCurrentFrame.mTagFrameData;
+    else
+        mTagFrameData.Clear();
+
+    // PinHole 经典双目 Nleft==-1：mvpMapPoints 仅覆盖左目；鱼眼双目才是 left+right
+    mbFisheyeStereo = (pTracker->mCurrentFrame.Nleft != -1);
+
     if(both){
         mvCurrentKeysRight = pTracker->mCurrentFrame.mvKeysRight;
         pTracker->mImRight.copyTo(mImRight);
-        N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
+        mvuRight = pTracker->mCurrentFrame.mvuRight;
+        if(mbFisheyeStereo)
+            N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
+        else
+            N = mvCurrentKeys.size();
     }
     else{
         N = mvCurrentKeys.size();
+        mvuRight.clear();
     }
 
     mvbVO = vector<bool>(N,false);
@@ -410,7 +504,10 @@ void FrameDrawer::Update(Tracking *pTracker)
     }
     else if(pTracker->mLastProcessedState==Tracking::OK)
     {
-        for(int i=0;i<N;i++)
+        const int nMapPts = static_cast<int>(pTracker->mCurrentFrame.mvpMapPoints.size());
+        const int nLoop = std::min(N, nMapPts);
+        const int nLeftKeys = static_cast<int>(mvCurrentKeys.size());
+        for(int i=0;i<nLoop;i++)
         {
             MapPoint* pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
             if(pMP)
@@ -422,12 +519,18 @@ void FrameDrawer::Update(Tracking *pTracker)
                     else
                         mvbVO[i]=true;
 
-                    mmMatchedInImage[pMP->mnId] = mvCurrentKeys[i].pt;
+                    if(i < nLeftKeys)
+                        mmMatchedInImage[pMP->mnId] = mvCurrentKeys[i].pt;
+                    else if(mbFisheyeStereo)
+                        mmMatchedInImage[pMP->mnId] = mvCurrentKeysRight[i - nLeftKeys].pt;
                 }
                 else
                 {
                     mvpOutlierMPs.push_back(pMP);
-                    mvOutlierKeys.push_back(mvCurrentKeys[i]);
+                    if(i < nLeftKeys)
+                        mvOutlierKeys.push_back(mvCurrentKeys[i]);
+                    else if(mbFisheyeStereo)
+                        mvOutlierKeys.push_back(mvCurrentKeysRight[i - nLeftKeys]);
                 }
             }
         }
