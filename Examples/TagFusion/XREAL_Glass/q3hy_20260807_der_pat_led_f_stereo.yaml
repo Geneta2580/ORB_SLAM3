@@ -1,0 +1,133 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# XREAL Glass cam0+cam1 — TagFusion stereo
+# Dataset: q3hy/20260807/der_pat_led_f (SN L623X00088)
+#
+# Path layout (与 stereo_xreal_glass_tag 搜索逻辑兼容，任选其一作为 argv[3]):
+#   .../der_pat_led_f/01-1
+#   .../der_pat_led_f/01-1/raw_data/glass
+#   .../der_pat_led_f/01-1/raw_data/glass/cam0/images
+#
+# Resolved as:
+#   .../raw_data/glass/cam0/images  +  .../raw_data/glass/cam1/images
+#   timestamps.txt: "m0000000.pgm <t>"（左右同名）
+#
+# Intrinsics / extrinsics from:
+#   .../01-1/ground_truth/calib/calib.yaml
+# Camera.model: fisheye6202 → ORB-SLAM3 KannalaBrandt8 使用 kc[0:4] 近似
+# Stereo.T_c1_c2 由 cam0_q_cam1 (Hamilton qx,qy,qz,qw) + cam0_p_cam1 构成
+# Resolution (W x H): 640 x 512  （注意：不是旧样例的 480x640，勿直接复用旧内参）
+# FPS: ~60
+#--------------------------------------------------------------------------------------------
+
+File.version: "1.0"
+
+System.saveOnlinePose: 1
+System.saveOnlinePoseFile: "OnlineCameraTrajectory.txt"
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters
+#--------------------------------------------------------------------------------------------
+Camera.type: "KannalaBrandt8"
+
+# Left = cam0
+Camera1.fx: 238.4042410017
+Camera1.fy: 238.5116901337
+Camera1.cx: 324.6963505947
+Camera1.cy: 243.4401718335
+
+Camera1.k1:  0.0010037618107762093
+Camera1.k2:  0.008895943577831642
+Camera1.k3: -0.016388722803763738
+Camera1.k4:  0.015306190751537468
+
+# Right = cam1
+Camera2.fx: 238.1648391162
+Camera2.fy: 238.3401459786
+Camera2.cx: 316.8720834859
+Camera2.cy: 266.6127622166
+
+Camera2.k1:  0.002452983607957147
+Camera2.k2:  0.0056379781394234425
+Camera2.k3: -0.01368141131139111
+Camera2.k4:  0.014057990984231517
+
+Camera.width: 640
+Camera.height: 512
+
+# timestamps 相邻约 0.01667s
+Camera.fps: 60
+
+Camera.RGB: 1
+
+Camera1.overlappingBegin: 0
+Camera1.overlappingEnd: 639
+Camera2.overlappingBegin: 0
+Camera2.overlappingEnd: 639
+
+Stereo.ThDepth: 40.0
+
+# T_c1_c2：左相机(cam0)系下右相机(cam1)位姿；基线约 0.1375 m
+Stereo.T_c1_c2: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [0.982466123700815,  0.010406054723481,  0.186150556822661,  0.136993335196344,
+         -0.012435800384956,  0.999875239622072,  0.009739407553270, -0.000205194166074,
+         -0.186025983800866, -0.011883569152198,  0.982472958475257, -0.012126014824532,
+          0.0, 0.0, 0.0, 1.0]
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+ORBextractor.nFeatures: 1200
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.enable: 0
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 2.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.5
+Viewer.ViewpointZ: -1.2
+Viewer.ViewpointF: 500.0
+Viewer.imageViewScale: 1.0
+Viewer.showTagMap: 1
+Viewer.showTagKFs: 1
+
+#--------------------------------------------------------------------------------------------
+# Tag Parameters  （Tag.size 请按现场印刷边长核对；其余沿用 XREAL_Glass 样例）
+#--------------------------------------------------------------------------------------------
+Tag.family: "tag36h11"
+Tag.hamming: 2
+Tag.black_border: 1
+Tag.size: 0.144
+Tag.clahe: 0
+Tag.clahe_clip_limit: 2.0
+Tag.clahe_tile_grid: 8
+Tag.verbose: 1
+Tag.export: 1
+Tag.export_dir: "tag_export"
+Tag.viewer: 0
+Tag.save_vis: 1
+Tag.save_vis_dir: "tag_vis"
+Tag.show_in_orb_viewer: 1
+Tag.pose_optimization: 1
+Tag.corner_sigma: 2.0
+Tag.min_inlier_corners: 3
+Tag.fixed_only: 0
+Tag.local_ba.enable: 1
+Tag.local_ba.optimize_active: 1
+Tag.local_ba.corner_sigma: 2.0
+Tag.local_ba.min_inlier_corners: 3
+Tag.local_ba.verbose: 1

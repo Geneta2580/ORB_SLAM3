@@ -1,13 +1,27 @@
 #!/usr/bin/env bash
 # 启动 XREAL Glass cam0+cam1 TagFusion（双目）
 #
-# 用法:
-#   ./run_xreal_glass_cam0.sh
-#   ./run_xreal_glass_cam0.sh /path/to/glass [traj_name]
-#   ./run_xreal_glass_cam0.sh /path/to/glass/cam0/images [traj_name]
-#   SEQ=/path/to/20260227-room-patrol-11-1/raw_data/glass ./run_xreal_glass_cam0.sh
+# 依赖（本机本地前缀）:
+#   source /home/jxpang/project/deps/env.sh
 #
-# 运行前请确认 XREAL_Glass_stereo.yaml 中 Camera1/2 与 Stereo.T_c1_c2 已填写
+# 用法:
+#   ./run_xreal_glass_stereo.sh
+#   ./run_xreal_glass_stereo.sh /path/to/glass [traj_name]
+#   ./run_xreal_glass_stereo.sh /path/to/seq_root [traj_name]   # 含 raw_data/glass 的序列根目录也可
+#   ./run_xreal_glass_stereo.sh /path/to/glass/cam0/images [traj_name]
+#   SEQ=/path/to/.../raw_data/glass ./run_xreal_glass_stereo.sh
+#
+# 换配置（默认 XREAL_Glass_stereo.yaml）:
+#   SETTINGS=./q3hy_20260807_der_pat_led_f_stereo.yaml \
+#     ./run_xreal_glass_stereo.sh \
+#     /data/NEW_AI_DATA/data_sip/dataset/q3hy/20260807/der_pat_led_f/01-1 \
+#     der_pat_01-1
+#
+# 环境变量（均可选）:
+#   VOC / SETTINGS / BIN / SEQ
+#
+# 运行前请确认所用 yaml 中 Camera1/2、Stereo.T_c1_c2、分辨率与序列一致
+# （q3hy 为 640x512@60；旧 room-patrol 样例为 480x640@30，勿混用）
 
 set -euo pipefail
 
