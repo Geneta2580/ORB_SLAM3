@@ -1360,7 +1360,8 @@ int Optimizer::PoseOptimization(Frame *pFrame,
 }
 
 void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges,
-                                      const tag::TagLocalBAParams &tagParams, tag::TagLocalBAStats *tagStats)
+                                      const tag::TagLocalBAParams &tagParams, tag::TagLocalBAStats *tagStats,
+                                      bool commit, bool useTagEdges, tag::LocalBAShadowResult *shadow)
 {
     if(tagStats)
         *tagStats = tag::TagLocalBAStats();
@@ -1485,11 +1486,49 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 
     num_fixedKF = static_cast<int>(lFixedCameras.size()) + num_fixedKF;
 
-    const bool bHasGauge = bHasInitKF || bHasFixedPoseKF || !lFixedCameras.empty() || bHasFixedAnchorTag;
+    if(shadow)
+    {
+        shadow->local_kfs.assign(lLocalKeyFrames.begin(), lLocalKeyFrames.end());
+        shadow->fixed_kfs.assign(lFixedCameras.begin(), lFixedCameras.end());
+        shadow->local_mps.assign(lLocalMapPoints.begin(), lLocalMapPoints.end());
+        shadow->num_tags = static_cast<int>(lLocalMapTags.size());
+        shadow->num_opt_kf = static_cast<int>(lLocalKeyFrames.size());
+        shadow->num_fixed_kf = num_fixedKF;
+        shadow->num_mps = static_cast<int>(lLocalMapPoints.size());
+        shadow->solved = false;
+        shadow->forced_common_gauge = false;
+    }
+
+    const bool bHasKfGauge = bHasInitKF || bHasFixedPoseKF || !lFixedCameras.empty();
+    const bool bHasGauge = bHasKfGauge || bHasFixedAnchorTag;
     if(!bHasGauge)
     {
         Verbose::PrintMess("LM-LBA: No gauge (fixed KF / FIXED_ANCHOR Tag), LBA aborted", Verbose::VERBOSITY_NORMAL);
         return;
+    }
+
+    // ORB shadow 去掉 Tag 边后可能只剩 FIXED_ANCHOR 作为名义 gauge。
+    // 两边共同固定最老 Local KF，避免 ORB 分支奇异。
+    KeyFrame *pForcedGaugeKF = nullptr;
+    if(!bHasKfGauge && bHasFixedAnchorTag && !lLocalKeyFrames.empty())
+    {
+        pForcedGaugeKF = lLocalKeyFrames.front();
+        for(KeyFrame *pKFi : lLocalKeyFrames)
+        {
+            if(!pKFi || pKFi->isBad())
+                continue;
+            if(!pForcedGaugeKF || pKFi->mnId < pForcedGaugeKF->mnId)
+                pForcedGaugeKF = pKFi;
+        }
+        if(pForcedGaugeKF)
+        {
+            num_fixedKF += 1;
+            if(shadow)
+            {
+                shadow->forced_common_gauge = true;
+                shadow->num_fixed_kf = num_fixedKF;
+            }
+        }
     }
 
     // Setup optimizer
@@ -1525,7 +1564,8 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>()));
         vSE3->setId(pKFi->mnId);
         // Tag 米制锚点 KF 与地图初始 KF 一并固定，避免 Local BA 漂尺度
-        vSE3->setFixed(pKFi->mnId==pMap->GetInitKFid() || pKFi->IsFixedPose());
+        vSE3->setFixed(pKFi->mnId==pMap->GetInitKFid() || pKFi->IsFixedPose() ||
+                       pKFi == pForcedGaugeKF);
         optimizer.addVertex(vSE3);
         if(pKFi->mnId>maxKFid)
             maxKFid=pKFi->mnId;
@@ -1732,7 +1772,7 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     vector<TagCornerEdgeRecord> vTagCornerEdges;
     int nTagEdges = 0;
 
-    if(tagParams.enable && !lLocalMapTags.empty())
+    if(tagParams.enable && useTagEdges && !lLocalMapTags.empty())
     {
         unsigned long maxPointVid = maxKFid;
         for(MapPoint *pMP : lLocalMapPoints)
@@ -2003,6 +2043,9 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         }
 
         // 遍历每个组，并检查每个组的角点是否为内点
+        std::set<int> outlierTagIds;
+        std::vector<tag::TagGroupOutlier> tagGroups;
+        tagGroups.reserve(groups.size());
         for(auto &kv : groups)
         {
             int nIn = 0;
@@ -2012,6 +2055,17 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                     ++nIn;
             }
             const bool keep = nIn >= tagParams.min_inlier_corners;
+            const TagCornerEdgeRecord &front = vTagCornerEdges[kv.second.front()];
+            tag::TagGroupOutlier g;
+            g.kf_id = front.pKF ? front.pKF->mnId : 0;
+            g.tag_id = front.tagId;
+            g.camera = front.cameraId;
+            g.n_corners = static_cast<int>(kv.second.size());
+            g.n_inlier_corners = nIn;
+            g.is_opt_outlier = !keep;
+            tagGroups.push_back(g);
+            if(!keep)
+                outlierTagIds.insert(front.tagId);
             for(size_t idx : kv.second)
             {
                 // 遍历每个组中的角点，并标记为外点
@@ -2022,9 +2076,39 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                     ++nTagOutliers;
             }
         }
+        if(tagStats)
+        {
+            tagStats->outlier_tag_ids.assign(outlierTagIds.begin(), outlierTagIds.end());
+            tagStats->tag_groups = tagGroups;
+        }
+        if(shadow)
+        {
+            shadow->outlier_tag_ids.assign(outlierTagIds.begin(), outlierTagIds.end());
+            shadow->tag_groups = std::move(tagGroups);
+        }
     }
     if(tagStats)
         tagStats->num_tag_outliers = nTagOutliers;
+
+    if(shadow)
+    {
+        shadow->num_tag_edges = nTagEdges;
+        shadow->num_tag_outliers = nTagOutliers;
+        shadow->tag_rmse_before = tagRmseBefore;
+        shadow->tag_rmse_after = tagRmseAfter;
+        for(KeyFrame *pKFi : lLocalKeyFrames)
+        {
+            g2o::VertexSE3Expmap *vSE3 =
+                static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKFi->mnId));
+            if(!vSE3)
+                continue;
+            const g2o::SE3Quat SE3quat = vSE3->estimate();
+            shadow->local_kf_poses[pKFi->mnId] =
+                Sophus::SE3f(SE3quat.rotation().cast<float>(),
+                             SE3quat.translation().cast<float>());
+        }
+        shadow->solved = true;
+    }
 
     if(tagParams.verbose && !vTagCornerEdges.empty())
     {
@@ -2055,6 +2139,9 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                  << " dtrans=" << t_norm << " dang=" << angle << endl;
         }
     }
+
+    if(!commit)
+        return;
 
     // Get Map Mutex
     unique_lock<mutex> lock(pMap->mMutexMapUpdate);
@@ -2146,6 +2233,25 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     }
 
     pMap->IncreaseChangeIndex();
+}
+
+void Optimizer::ResetLocalBAWindowFlags(const tag::LocalBAShadowResult &shadow)
+{
+    for(KeyFrame *pKF : shadow.local_kfs)
+    {
+        if(pKF)
+            pKF->mnBALocalForKF = 0;
+    }
+    for(KeyFrame *pKF : shadow.fixed_kfs)
+    {
+        if(pKF)
+            pKF->mnBAFixedForKF = 0;
+    }
+    for(MapPoint *pMP : shadow.local_mps)
+    {
+        if(pMP)
+            pMP->mnBALocalForKF = 0;
+    }
 }
 
 

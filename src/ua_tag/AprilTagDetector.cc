@@ -564,10 +564,12 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
         obs.tag_id = det.id;
         obs.camera_id = camera_id;
         obs.hamming = det.hammingDistance;
+        obs.observed_perimeter = det.observedPerimeter;
         // ethz has no decision_margin; use perimeter as a rough quality proxy
-        obs.decision_margin = static_cast<float>(det.observedPerimeter);
+        obs.decision_margin = obs.observed_perimeter;
         for(int k = 0; k < 4; ++k)
             obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
+        obs.observed_area = tag::TagObservation::ComputeQuadArea(obs.corners_raw);
 
         // 写入与 GeometricCamera 一致的理想针孔角点（供 IPPE）；无模型时等于 raw
         if(mpImpl->has_camera_model || geom)

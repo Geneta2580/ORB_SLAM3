@@ -1,0 +1,658 @@
+VOC      = /home/geneta/project/XREAL/ORB_SLAM3/Vocabulary/ORBvoc.txt
+SETTINGS = ./q3hy.yaml
+SEQ      = /home/geneta/dataset/01-1
+TRAJ     = ror_pat_01-1
+BIN      = /home/geneta/project/XREAL/ORB_SLAM3/Examples/TagFusion/XREAL_Glass/stereo_xreal_glass_tag
+-------
+file name: ror_pat_01-1
+Loading XREAL Glass stereo sequence from /home/geneta/dataset/01-1 ...
+Timestamps: /home/geneta/dataset/01-1/raw_data/glass/cam0/images/timestamps.txt (22883)
+Left:       /home/geneta/dataset/01-1/raw_data/glass/cam0/images
+Right:      /home/geneta/dataset/01-1/raw_data/glass/cam1/images
+LOADED 22883 stereo pairs!
+
+-------
+
+ORB-SLAM3 Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ORB-SLAM2 Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+This program comes with ABSOLUTELY NO WARRANTY;
+This is free software, and you are welcome to redistribute it
+under certain conditions. See LICENSE.txt.
+
+Input sensor was set to: Stereo
+Loading settings from ./q3hy.yaml
+	-Loaded camera 1
+	-Loaded camera 2
+Camera.newHeight optional parameter does not exist...
+Camera.newWidth optional parameter does not exist...
+	-Loaded image info
+	-Loaded ORB settings
+	-Loaded viewer settings
+System.LoadAtlasFromFile optional parameter does not exist...
+System.SaveAtlasToFile optional parameter does not exist...
+	-Loaded Atlas settings
+System.thFarPoints optional parameter does not exist...
+	-Loaded misc parameters
+----------------------------------
+SLAM settings: 
+	-Camera 1 parameters (Kannala-Brandt): [ 238.40423583984375 238.51168823242188 324.69635009765625 243.44017028808594 0.0010037617757916451 0.0088959438726305962 -0.016388723626732826 0.015306190587580204 ]
+	-Camera 2 parameters (Kannala-Brandt: [ 238.16484069824219 238.34014892578125 316.8720703125 266.61276245117188 0.002452983520925045 0.0056379782035946846 -0.013681411743164062 0.014057991094887257 ]
+	-Original image size: [ 640 , 512 ]
+	-Current image size: [ 640 , 512 ]
+	-Sequence FPS: 60
+	-Stereo baseline: 0.13752910494804382
+	-Stereo depth threshold : 40
+	-Camera 1 overlapping area: [ 0 , 639 ]
+	-Camera 2 overlapping area: [ 0 , 639 ]
+	-Features per image: 1200
+	-ORB scale factor: 1.2000000476837158
+	-ORB number of scales: 8
+	-Initial FAST threshold: 20
+	-Min FAST threshold: 7
+
+
+Loading ORB Vocabulary. This could take a while...
+Vocabulary loaded!
+
+Initialization of Atlas from scratch 
+Creation of new map with id: 0
+Creation of new map with last KF id: 0
+Seq. Name: 
+[TagMapExporter] export dir=tag_export
+Tag joint PoseOptimization enabled (corner_sigma=2, min_inlier_corners=3, fixed_only=0)
+Online TUM pose log enabled -> OnlineCameraTrajectory.txt
+Tag overlay on ORB Current Frame enabled
+There are 2 cameras in the atlas
+Camera 0 is fisheye
+Camera 2 is fisheye
+Tag LocalBA enabled (optimize_active=1, corner_sigma=2, min_inlier_corners=3)
+ORB Viewer enabled
+[TagInitializer] TryInitialize Stereo (frame_id=0)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=0)
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+First KF:0; Map init KF:0
+[TagInit] stereo Tag TryInitialize skipped/failed (frame_id=0)
+New Map created with 95 points
+Starting the Viewer
+[TagInitializer] TryInitialize Stereo (frame_id=132)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=132)
+[TagInitializer] init_single frame_id=132 tag_id=5 cam=right selected=-1 ambiguity_ratio=1.1974444389343262 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=227)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=227)
+[TagInitializer] init_single frame_id=227 tag_id=5 cam=right selected=-1 ambiguity_ratio=1.1974483728408813 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=343)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=343)
+[TagInitializer] init_single frame_id=343 tag_id=99 cam=left selected=0 ambiguity_ratio=17.703659057617188 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=344)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=344)
+[TagInitializer] init_single frame_id=344 tag_id=99 cam=left selected=0 ambiguity_ratio=8.0095100402832031 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=344 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.2335401773452759 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=345)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=345)
+[TagInitializer] init_single frame_id=345 tag_id=99 cam=left selected=0 ambiguity_ratio=6.9732060432434082 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=346)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=346)
+[TagInitializer] init_single frame_id=346 tag_id=99 cam=left selected=0 ambiguity_ratio=10.120898246765137 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=346 tag_id=99 cam=right selected=0 ambiguity_ratio=4.7036409378051758 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=391)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=391)
+[TagInitializer] init_single frame_id=391 tag_id=99 cam=left selected=0 ambiguity_ratio=3.3813769817352295 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=392)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=392)
+[TagInitializer] init_single frame_id=392 tag_id=99 cam=left selected=0 ambiguity_ratio=3.2306604385375977 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=493)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=493)
+[TagInitializer] init_single frame_id=493 tag_id=99 cam=left selected=0 ambiguity_ratio=4.6942791938781738 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=493 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.2770320177078247 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=20.758182250705605 e1=20.814123397517228 rho=1.0026948962165041 tau=3 mono_ratio=2.7290406227111816
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=13.783485698424556 e1=13.802857354611575 rho=1.0014054250578885 tau=3 mono_ratio=1.054142951965332
+[TagInitializer] TryInitialize Stereo (frame_id=494)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=494)
+[TagInitializer] init_single frame_id=494 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.7290406227111816 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=494 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.054142951965332 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=541)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=541)
+[TagInitializer] init_single frame_id=541 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5921370983123779 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=543)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=543)
+[TagInitializer] init_single frame_id=543 tag_id=99 cam=left selected=0 ambiguity_ratio=3.924220085144043 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=544)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=544)
+[TagInitializer] init_single frame_id=544 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.9858025312423706 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=546)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=546)
+[TagInitializer] init_single frame_id=546 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.5963085889816284 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=749)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=749)
+[TagInitializer] init_single frame_id=749 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.3500303030014038 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=19.073697341622839 e1=19.079328044516767 rho=1.0002952077299321 tau=3 mono_ratio=2.5963046550750732
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=14.38833208623779 e1=14.364928159913639 rho=1.0016292407495524 tau=3 mono_ratio=1.1135348081588745
+[TagInitializer] TryInitialize Stereo (frame_id=804)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=804)
+[TagInitializer] init_single frame_id=804 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5963046550750732 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=804 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.1135348081588745 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=805)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=805)
+[TagInitializer] init_single frame_id=805 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.3311512470245361 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=807)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=807)
+[TagInitializer] init_single frame_id=807 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.2897591590881348 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+AprilTags::GrayModel::compute() has underflow in matrix inverse
+AprilTags::GrayModel::compute() has underflow in matrix inverse
+AprilTags::GrayModel::compute() has underflow in matrix inverse
+AprilTags::GrayModel::compute() has underflow in matrix inverse
+[TagInitializer] TryInitialize Stereo (frame_id=859)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=859)
+[TagInitializer] init_single frame_id=859 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.1337928771972656 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=860)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=860)
+[TagInitializer] init_single frame_id=860 tag_id=99 cam=left selected=0 ambiguity_ratio=4.8549127578735352 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=912)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=912)
+[TagInitializer] init_single frame_id=912 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.8588972091674805 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=913)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=913)
+[TagInitializer] init_single frame_id=913 tag_id=99 cam=left selected=0 ambiguity_ratio=5.0379858016967773 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=914)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=914)
+[TagInitializer] init_single frame_id=914 tag_id=99 cam=left selected=0 ambiguity_ratio=7.5104680061340332 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=914 tag_id=99 cam=right selected=-1 ambiguity_ratio=1.1057336330413818 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=952)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=952)
+[TagInitializer] init_single frame_id=952 tag_id=5 cam=left selected=-1 ambiguity_ratio=1.0300493240356445 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=952 tag_id=25 cam=left selected=0 ambiguity_ratio=3.764772891998291 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[25]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=953)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=953)
+[TagInitializer] init_single frame_id=953 tag_id=4 cam=right selected=-1 ambiguity_ratio=1.2426333427429199 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=953 tag_id=6 cam=right selected=-1 ambiguity_ratio=1.3266030550003052 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=956)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=956)
+[TagInitializer] init_single frame_id=956 tag_id=5 cam=left selected=-1 ambiguity_ratio=1.126096248626709 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=957)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=957)
+[TagInitializer] init_single frame_id=957 tag_id=4 cam=right selected=-1 ambiguity_ratio=1.2542637586593628 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=958)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=958)
+[TagInitializer] init_single frame_id=958 tag_id=6 cam=left selected=-1 ambiguity_ratio=1.2358983755111694 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=963)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=963)
+[TagInitializer] init_single frame_id=963 tag_id=25 cam=left selected=-1 ambiguity_ratio=1.0911004543304443 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=963 tag_id=4 cam=right selected=-1 ambiguity_ratio=1.3182263374328613 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=964)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=964)
+[TagInitializer] init_single frame_id=964 tag_id=4 cam=left selected=-1 ambiguity_ratio=1.3764631748199463 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=964 tag_id=5 cam=left selected=-1 ambiguity_ratio=1.1900037527084351 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=965)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=965)
+[TagInitializer] init_single frame_id=965 tag_id=5 cam=left selected=-1 ambiguity_ratio=1.2590895891189575 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=965 tag_id=25 cam=right selected=-1 ambiguity_ratio=1.7396385669708252 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=973)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=973)
+[TagInitializer] init_single frame_id=973 tag_id=5 cam=right selected=-1 ambiguity_ratio=1.2657904624938965 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=974)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=974)
+[TagInitializer] init_single frame_id=974 tag_id=5 cam=left selected=-1 ambiguity_ratio=1.7868564128875732 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=976)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=976)
+[TagInitializer] init_single frame_id=976 tag_id=4 cam=right selected=-1 ambiguity_ratio=2.1349849700927734 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=976 tag_id=5 cam=right selected=-1 ambiguity_ratio=1.2735778093338013 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=983)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=983)
+[TagInitializer] init_single frame_id=983 tag_id=5 cam=left selected=-1 ambiguity_ratio=2.0286974906921387 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=987)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=987)
+[TagInitializer] init_single frame_id=987 tag_id=6 cam=right selected=-1 ambiguity_ratio=1.3038462400436401 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=988)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=988)
+[TagInitializer] init_single frame_id=988 tag_id=6 cam=left selected=-1 ambiguity_ratio=1.4011763334274292 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=989)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=989)
+[TagInitializer] init_single frame_id=989 tag_id=99 cam=left selected=0 ambiguity_ratio=4.7178959846496582 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=990)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=990)
+[TagInitializer] init_single frame_id=990 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5625028610229492 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=992)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=992)
+[TagInitializer] init_single frame_id=992 tag_id=99 cam=left selected=0 ambiguity_ratio=3.4358854293823242 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=993)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=993)
+[TagInitializer] init_single frame_id=993 tag_id=6 cam=left selected=-1 ambiguity_ratio=1.3334848880767822 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=993 tag_id=99 cam=left selected=0 ambiguity_ratio=3.0662314891815186 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=994)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=994)
+[TagInitializer] init_single frame_id=994 tag_id=99 cam=left selected=0 ambiguity_ratio=4.4090366363525391 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=996)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=996)
+[TagInitializer] init_single frame_id=996 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5187013149261475 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=997)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=997)
+[TagInitializer] init_single frame_id=997 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.99432373046875 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=997 tag_id=99 cam=right selected=0 ambiguity_ratio=3.6584975719451904 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=998)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=998)
+[TagInitializer] init_single frame_id=998 tag_id=99 cam=left selected=0 ambiguity_ratio=4.4240388870239258 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=999)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=999)
+[TagInitializer] init_single frame_id=999 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.9969661235809326 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1000)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1000)
+[TagInitializer] init_single frame_id=1000 tag_id=99 cam=left selected=0 ambiguity_ratio=4.647707462310791 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1001)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1001)
+[TagInitializer] init_single frame_id=1001 tag_id=99 cam=left selected=0 ambiguity_ratio=5.5496244430541992 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1001 tag_id=99 cam=right selected=0 ambiguity_ratio=4.5674467086791992 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1002)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1002)
+[TagInitializer] init_single frame_id=1002 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.9504034519195557 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1002 tag_id=99 cam=right selected=0 ambiguity_ratio=4.2822060585021973 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1003)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1003)
+[TagInitializer] init_single frame_id=1003 tag_id=99 cam=left selected=0 ambiguity_ratio=4.2458844184875488 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1004)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1004)
+[TagInitializer] init_single frame_id=1004 tag_id=99 cam=left selected=0 ambiguity_ratio=8.6896457672119141 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1005)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1005)
+[TagInitializer] init_single frame_id=1005 tag_id=99 cam=left selected=0 ambiguity_ratio=6.1073665618896484 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1006)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1006)
+[TagInitializer] init_single frame_id=1006 tag_id=99 cam=left selected=0 ambiguity_ratio=3.9528579711914062 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1006 tag_id=99 cam=right selected=0 ambiguity_ratio=3.3029794692993164 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1007)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1007)
+[TagInitializer] init_single frame_id=1007 tag_id=99 cam=left selected=0 ambiguity_ratio=3.5365772247314453 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1007 tag_id=99 cam=right selected=0 ambiguity_ratio=4.7314538955688477 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1008)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1008)
+[TagInitializer] init_single frame_id=1008 tag_id=99 cam=left selected=0 ambiguity_ratio=5.4535789489746094 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1008 tag_id=99 cam=right selected=0 ambiguity_ratio=4.2701253890991211 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1009)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1009)
+[TagInitializer] init_single frame_id=1009 tag_id=99 cam=left selected=0 ambiguity_ratio=8.1357669830322266 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1010)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1010)
+[TagInitializer] init_single frame_id=1010 tag_id=99 cam=left selected=0 ambiguity_ratio=4.7726049423217773 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1010 tag_id=99 cam=right selected=0 ambiguity_ratio=4.2465872764587402 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1011)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1011)
+[TagInitializer] init_single frame_id=1011 tag_id=99 cam=left selected=0 ambiguity_ratio=4.0277600288391113 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1012)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1012)
+[TagInitializer] init_single frame_id=1012 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.741502046585083 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1012 tag_id=99 cam=right selected=0 ambiguity_ratio=3.4201951026916504 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1013)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1013)
+[TagInitializer] init_single frame_id=1013 tag_id=99 cam=left selected=0 ambiguity_ratio=3.4550900459289551 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1014)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1014)
+[TagInitializer] init_single frame_id=1014 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.958163857460022 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1015)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1015)
+[TagInitializer] init_single frame_id=1015 tag_id=99 cam=left selected=0 ambiguity_ratio=5.6927309036254883 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1016)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1016)
+[TagInitializer] init_single frame_id=1016 tag_id=99 cam=left selected=0 ambiguity_ratio=3.7425074577331543 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1016 tag_id=99 cam=right selected=0 ambiguity_ratio=8.6655282974243164 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1017)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1017)
+[TagInitializer] init_single frame_id=1017 tag_id=99 cam=left selected=0 ambiguity_ratio=4.5669007301330566 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1017 tag_id=99 cam=right selected=0 ambiguity_ratio=13.152194976806641 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1018)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1018)
+[TagInitializer] init_single frame_id=1018 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5901424884796143 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1018 tag_id=99 cam=right selected=0 ambiguity_ratio=3.4735074043273926 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1019)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1019)
+[TagInitializer] init_single frame_id=1019 tag_id=99 cam=left selected=0 ambiguity_ratio=9.9393367767333984 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1019 tag_id=99 cam=right selected=0 ambiguity_ratio=13.690608978271484 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1020)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1020)
+[TagInitializer] init_single frame_id=1020 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.7529017925262451 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1020 tag_id=99 cam=right selected=0 ambiguity_ratio=4.3505287170410156 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1021)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1021)
+[TagInitializer] init_single frame_id=1021 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.004793643951416 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1021 tag_id=99 cam=right selected=0 ambiguity_ratio=7.740208625793457 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1022)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1022)
+[TagInitializer] init_single frame_id=1022 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.2379715442657471 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=5.3560523990891769 e1=5.4382741093937605 rho=1.0153511773527859 tau=3 mono_ratio=1.8179785013198853
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=4.6108931575525931 e1=4.7021784604555998 rho=1.0197977484543714 tau=3 mono_ratio=2.3183691501617432
+[TagInitializer] TryInitialize Stereo (frame_id=1023)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1023)
+[TagInitializer] init_single frame_id=1023 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.8179785013198853 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1023 tag_id=99 cam=right selected=-1 ambiguity_ratio=2.3183691501617432 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1024)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1024)
+[TagInitializer] init_single frame_id=1024 tag_id=6 cam=left selected=-1 ambiguity_ratio=2.0210106372833252 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1024 tag_id=99 cam=left selected=0 ambiguity_ratio=4.3725690841674805 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1024 tag_id=99 cam=right selected=0 ambiguity_ratio=6.3860335350036621 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1025)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1025)
+[TagInitializer] init_single frame_id=1025 tag_id=99 cam=left selected=0 ambiguity_ratio=4.9950785636901855 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1025 tag_id=99 cam=right selected=0 ambiguity_ratio=15.596454620361328 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1026)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1026)
+[TagInitializer] init_single frame_id=1026 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.7605946063995361 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1026 tag_id=99 cam=right selected=0 ambiguity_ratio=3.9837205410003662 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1027)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1027)
+[TagInitializer] init_single frame_id=1027 tag_id=99 cam=left selected=0 ambiguity_ratio=3.469310998916626 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1027 tag_id=99 cam=right selected=0 ambiguity_ratio=6.5187501907348633 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1028)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1028)
+[TagInitializer] init_single frame_id=1028 tag_id=99 cam=left selected=0 ambiguity_ratio=5.5495543479919434 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1028 tag_id=99 cam=right selected=0 ambiguity_ratio=5.3766674995422363 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1029)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1029)
+[TagInitializer] init_single frame_id=1029 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.4159731864929199 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1029 tag_id=99 cam=right selected=0 ambiguity_ratio=20.329395294189453 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1030)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1030)
+[TagInitializer] init_single frame_id=1030 tag_id=99 cam=left selected=0 ambiguity_ratio=3.4041082859039307 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1030 tag_id=99 cam=right selected=0 ambiguity_ratio=3.4851589202880859 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1031)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1031)
+[TagInitializer] init_single frame_id=1031 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.7574281692504883 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1032)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1032)
+[TagInitializer] init_single frame_id=1032 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.1385123729705811 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1032 tag_id=99 cam=right selected=0 ambiguity_ratio=3.7911460399627686 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1033)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1033)
+[TagInitializer] init_single frame_id=1033 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.9978609085083008 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1033 tag_id=99 cam=right selected=0 ambiguity_ratio=4.473076343536377 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1034)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1034)
+[TagInitializer] init_single frame_id=1034 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.0819065570831299 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1034 tag_id=99 cam=right selected=0 ambiguity_ratio=4.3694195747375488 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1035)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1035)
+[TagInitializer] init_single frame_id=1035 tag_id=99 cam=left selected=0 ambiguity_ratio=3.7690262794494629 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1035 tag_id=99 cam=right selected=0 ambiguity_ratio=4.4755153656005859 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1036)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1036)
+[TagInitializer] init_single frame_id=1036 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.3857946395874023 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1036 tag_id=99 cam=right selected=0 ambiguity_ratio=3.5241689682006836 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1037)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1037)
+[TagInitializer] init_single frame_id=1037 tag_id=99 cam=left selected=0 ambiguity_ratio=4.3531193733215332 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1037 tag_id=99 cam=right selected=-1 ambiguity_ratio=2.563805103302002 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=13.250784093286393 e1=13.303827876285702 rho=1.0040030674880727 tau=3 mono_ratio=2.7385146617889404
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=10.429730640592524 e1=10.485193951416363 rho=1.0053178085541978 tau=3 mono_ratio=2.3675649166107178
+[TagInitializer] TryInitialize Stereo (frame_id=1038)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1038)
+[TagInitializer] init_single frame_id=1038 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.7385146617889404 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1038 tag_id=99 cam=right selected=-1 ambiguity_ratio=2.3675649166107178 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1039)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1039)
+[TagInitializer] init_single frame_id=1039 tag_id=99 cam=left selected=0 ambiguity_ratio=3.8491003513336182 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1039 tag_id=99 cam=right selected=0 ambiguity_ratio=3.044100284576416 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1040)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1040)
+[TagInitializer] init_single frame_id=1040 tag_id=99 cam=left selected=0 ambiguity_ratio=3.1302492618560791 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1041)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1041)
+[TagInitializer] init_single frame_id=1041 tag_id=99 cam=left selected=0 ambiguity_ratio=3.709650993347168 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1042)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1042)
+[TagInitializer] init_single frame_id=1042 tag_id=99 cam=left selected=0 ambiguity_ratio=3.5474989414215088 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1043)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1043)
+[TagInitializer] init_single frame_id=1043 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.9488511085510254 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1044)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1044)
+[TagInitializer] init_single frame_id=1044 tag_id=99 cam=left selected=0 ambiguity_ratio=3.6553561687469482 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1044 tag_id=99 cam=right selected=0 ambiguity_ratio=3.3051469326019287 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1045)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1045)
+[TagInitializer] init_single frame_id=1045 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.5179612636566162 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1046)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1046)
+[TagInitializer] init_single frame_id=1046 tag_id=99 cam=left selected=0 ambiguity_ratio=4.324406623840332 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1047)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1047)
+[TagInitializer] init_single frame_id=1047 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.7702128887176514 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1048)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1048)
+[TagInitializer] init_single frame_id=1048 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.9156060218811035 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagStereo] fail tag_id=99 dir=L2R reason=stereo_ratio_weak e0=22.805558462025235 e1=22.856291913876547 rho=1.0022246090545675 tau=3 mono_ratio=2.449831485748291
+[TagStereo] fail tag_id=99 dir=R2L reason=stereo_ratio_weak e0=16.895543654564523 e1=16.94239187703738 rho=1.0027728153309483 tau=3 mono_ratio=2.9031167030334473
+[TagInitializer] TryInitialize Stereo (frame_id=1050)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1050)
+[TagInitializer] init_single frame_id=1050 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.449831485748291 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1050 tag_id=99 cam=right selected=-1 ambiguity_ratio=2.9031167030334473 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1051)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1051)
+[TagInitializer] init_single frame_id=1051 tag_id=99 cam=left selected=0 ambiguity_ratio=3.1221609115600586 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1052)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1052)
+[TagInitializer] init_single frame_id=1052 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.7214844226837158 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1053)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1053)
+[TagInitializer] init_single frame_id=1053 tag_id=99 cam=left selected=0 ambiguity_ratio=4.3574986457824707 cand0_valid=1 cand1_valid=1
+[TagInitializer] init_single frame_id=1053 tag_id=5 cam=right selected=-1 ambiguity_ratio=1.5156959295272827 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 1 (need >= 3) ids=[99]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1054)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1054)
+[TagInitializer] init_single frame_id=1054 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.996246337890625 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1055)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1055)
+[TagInitializer] init_single frame_id=1055 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.6499557495117188 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1056)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1056)
+[TagInitializer] init_single frame_id=1056 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.3962280750274658 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1057)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1057)
+[TagInitializer] init_single frame_id=1057 tag_id=99 cam=left selected=-1 ambiguity_ratio=2.1589622497558594 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)
+[TagInitializer] TryInitialize Stereo (frame_id=1058)
+[TagInitializer] TryInitializeSingleFrame running (frame_id=1058)
+[TagInitializer] init_single frame_id=1058 tag_id=99 cam=left selected=-1 ambiguity_ratio=1.5745072364807129 cand0_valid=1 cand1_valid=1
+[TagInitializer] unambiguous valid observations: 0 (need >= 3) ids=[]
+[TagInitializer] TryInitializeSingleFrame failed (insufficient unambiguous observations)

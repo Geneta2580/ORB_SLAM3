@@ -119,7 +119,7 @@ Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"
 Tag.viewer: 0
-Tag.save_vis: 1
+Tag.save_vis: 0
 Tag.save_vis_dir: "tag_vis"
 Tag.show_in_orb_viewer: 1
 Tag.pose_optimization: 1
@@ -131,3 +131,24 @@ Tag.local_ba.optimize_active: 1
 Tag.local_ba.corner_sigma: 2.0
 Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1
+
+# 单次运行双解对照（Pose-only 每个 Tag 帧；Local BA 仅当窗口含 Tag 边）
+# Δe = e(fused)-e(orb)：<0 Tag 拉近真值，>0 拉偏。对齐对 ORB/fused 共用一次。
+# imu_pose.txt 是 vicon_T_imu（Twb）；用 calib imu_T_cam 转成左相机 Twc = Twb * T_b_c。
+# 若改用 cam0_pose.txt，设 Tag.eval.gt_frame: "camera" 且不必填 T_b_c。
+Tag.eval.enable: 1
+Tag.eval.gt_file: "/home/geneta/dataset/01-1/ground_truth/data/imu_pose.txt"
+Tag.eval.gt_frame: "imu"              # imu | camera
+Tag.eval.gt_world_from_sensor: 1      # 1 = 文件是 T_world_sensor（vicon_T_*）
+Tag.eval.gt_time_scale: 1.0           # 时间戳已是秒
+# T_b_c = imu_T_cam（Hamilton qx,qy,qz,qw + imu_p_cam），p_imu = T_b_c * p_cam
+Tag.eval.T_b_c_q: [0.999939705582654, -0.009385208523719692, 0.00570081982854338, 6.0938688599368354e-05]
+Tag.eval.T_b_c_t: [-0.00804346828192818, 0.0044409085252387435, -0.004496215845057561]
+Tag.eval.align_mode: "pre_tag"   # none | yaml | pre_tag
+Tag.eval.out_dir: "tag_export"
+Tag.eval.lba_every_n: 1
+Tag.eval.induced_trans_th: 0.01
+Tag.eval.induced_rot_th_deg: 0.5
+Tag.eval.delta_trans_th: 0.01
+Tag.eval.delta_rot_th_deg: 0.5
+Tag.eval.gt_max_dt: 0.05

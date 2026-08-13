@@ -61,7 +61,11 @@ public:
 
     void static LocalBundleAdjustment(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges,
                                       const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
-                                      tag::TagLocalBAStats *tagStats = nullptr);
+                                      tag::TagLocalBAStats *tagStats = nullptr,
+                                      bool commit = true,
+                                      bool useTagEdges = true,
+                                      tag::LocalBAShadowResult *shadow = nullptr);
+    void static ResetLocalBAWindowFlags(const tag::LocalBAShadowResult &shadow);
 
     int static PoseOptimization(Frame* pFrame);
     // ORB MapPoint + Tag 角点联合位姿优化；返回值仍仅为 ORB MapPoint 内点数

@@ -1,7 +1,9 @@
 #include "ua_tag/TagTracker.h"
 
 #include "Frame.h"
+#include "KeyFrame.h"
 #include "Map.h"
+#include "ua_tag/MapTagData.h"
 #include "ua_tag/TagMapExporter.h"
 
 #include <iostream>
@@ -45,6 +47,30 @@ void TagTracker::LogCameraPose(const Frame &frame)
     if(!mpExporter || !mpExporter->IsEnabled() || !frame.HasPose())
         return;
     mpExporter->AppendCameraPose(frame.mnId, frame.mTimeStamp, frame.GetPose());
+}
+
+void TagTracker::LogTagDetections(const Frame &frame)
+{
+    if(!mpExporter || !mpExporter->IsEnabled())
+        return;
+    mpExporter->AppendTagDetections(frame.mnId, frame.mTimeStamp, frame.mTagFrameData);
+}
+
+void TagTracker::LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id,
+                                            int left_idx, int right_idx,
+                                            MapTagData *pTag)
+{
+    if(!mpExporter || !mpExporter->IsEnabled() || !pKF)
+        return;
+    mpExporter->AppendMapTagFirstRegistration(pKF, tag_id, left_idx, right_idx,
+                                              pTag);
+}
+
+void TagTracker::LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF)
+{
+    if(!mpExporter || !mpExporter->IsEnabled() || !pKF)
+        return;
+    mpExporter->LogKeyFrameMapTagFirstRegistrations(pKF);
 }
 
 void TagTracker::SaveExports(Map &map)

@@ -130,9 +130,9 @@ Tag.show_in_orb_viewer: 1       # 1=ORB Current Frame 叠加 Tag；双目并排�
 Tag.pose_optimization: 1
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
-Tag.fixed_only: 0
+Tag.fixed_only: 0 # 1=仅优化固定Tag；0=优化所有Tag
 Tag.local_ba.enable: 1
-Tag.local_ba.optimize_active: 1
+Tag.local_ba.optimize_active: 1 # 1=优化所有Active Tag；0=仅优化固定Tag
 Tag.local_ba.corner_sigma: 2.0
 Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1

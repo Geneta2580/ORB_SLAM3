@@ -100,6 +100,7 @@ src/ua_tag/TagTracker.cc
 src/ua_tag/TagOptimizer.cc
 src/ua_tag/TagMapExporter.cc
 src/ua_tag/TagPoseConstraints.cc
+src/ua_tag/TagEval.cc
 include/System.h
 include/Tracking.h
 include/LocalMapping.h
@@ -135,7 +136,8 @@ include/ua_tag/TagFrameData.h
 include/ua_tag/MapTagData.h
 include/ua_tag/TagOptimizer.h
 include/ua_tag/TagMapExporter.h
-include/ua_tag/TagPoseConstraints.h)
+include/ua_tag/TagPoseConstraints.h
+include/ua_tag/TagEval.h)
 
 add_subdirectory(Thirdparty/g2o)
 

@@ -28,6 +28,7 @@
 #include "ua_tag/AprilTagDetector.h"
 #include "ua_tag/MapTagData.h"
 #include "ua_tag/TagObservation.h"
+#include "ua_tag/TagEval.h"
 
 #include <algorithm>
 #include <chrono>
@@ -41,6 +42,47 @@
 
 namespace ORB_SLAM3
 {
+
+namespace {
+
+bool KeyFrameHasUsableMapTags(KeyFrame *pKF, Map *pMap, const tag::TagLocalBAParams &params)
+{
+    if(!pKF || !pMap)
+        return false;
+    const auto assocs = pKF->GetMapTagAssociations();
+    for(const auto &kv : assocs)
+    {
+        tag::MapTagData *pTag = kv.second.pMapTag;
+        if(!pTag || pTag->IsBad() || pTag->GetMap() != pMap)
+            continue;
+        if(!pTag->HasPose() || pTag->GetTagSize() <= 0.0f)
+            continue;
+        const tag::MapTagState st = pTag->GetState();
+        if(st == tag::MapTagState::FIXED_ANCHOR)
+            return true;
+        if(st == tag::MapTagState::ACTIVE && params.optimize_active)
+            return true;
+    }
+    return false;
+}
+
+bool LocalWindowMayHaveTags(KeyFrame *pKF, const tag::TagLocalBAParams &params)
+{
+    if(!pKF)
+        return false;
+    Map *pMap = pKF->GetMap();
+    if(KeyFrameHasUsableMapTags(pKF, pMap, params))
+        return true;
+    const std::vector<KeyFrame*> vpNeigh = pKF->GetVectorCovisibleKeyFrames();
+    for(KeyFrame *pKFi : vpNeigh)
+    {
+        if(KeyFrameHasUsableMapTags(pKFi, pMap, params))
+            return true;
+    }
+    return false;
+}
+
+}  // namespace
 
 LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName):
     mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
@@ -177,8 +219,37 @@ void LocalMapping::Run()
                     else
                     {
                         tag::TagLocalBAStats tagLbaStats;
-                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA,
-                                                         mTagLocalBAParams, &tagLbaStats);
+                        tag::TagEval *pEval = mpTracker ? mpTracker->GetTagEval() : nullptr;
+                        const bool doShadow =
+                            pEval && pEval->Enabled() && mTagLocalBAParams.enable
+                            && LocalWindowMayHaveTags(mpCurrentKeyFrame, mTagLocalBAParams)
+                            && pEval->WantLbaShadow();
+                        if(doShadow)
+                        {
+                            tag::LocalBAShadowResult orbRes, fusedRes;
+                            Optimizer::LocalBundleAdjustment(
+                                mpCurrentKeyFrame, nullptr, mpCurrentKeyFrame->GetMap(),
+                                num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA,
+                                mTagLocalBAParams, nullptr, false, false, &orbRes);
+                            Optimizer::ResetLocalBAWindowFlags(orbRes);
+                            Optimizer::LocalBundleAdjustment(
+                                mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),
+                                num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA,
+                                mTagLocalBAParams, &tagLbaStats, true, true, &fusedRes);
+                            if(orbRes.solved && fusedRes.solved)
+                                pEval->LogLbaShadow(mpCurrentKeyFrame, orbRes, fusedRes, mpTracker);
+                            else
+                                pEval->LogLbaTagGroups(mpCurrentKeyFrame, tagLbaStats.tag_groups);
+                        }
+                        else
+                        {
+                            Optimizer::LocalBundleAdjustment(
+                                mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),
+                                num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA,
+                                mTagLocalBAParams, &tagLbaStats);
+                            if(pEval && pEval->Enabled())
+                                pEval->LogLbaTagGroups(mpCurrentKeyFrame, tagLbaStats.tag_groups);
+                        }
                         b_doneLBA = true;
                     }
 
@@ -897,6 +968,11 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
                 pMap->EraseMapTag(tag_id);
             continue;
         }
+
+        // 首次成功注册进地图：记录观测面积 / 距离 / 光轴夹角
+        if(created && mpTracker)
+            mpTracker->LogMapTagFirstRegistration(pKF, tag_id, left_idx,
+                                                  right_idx, pTag.get());
 
         // CANDIDATE：无 pose → 单帧消歧初值（成功即 ACTIVE）或多帧消歧；
         // 已有 pose 却仍为 CANDIDATE（旧逻辑残留）→ 直接晋升 ACTIVE

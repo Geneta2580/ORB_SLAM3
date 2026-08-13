@@ -41,11 +41,14 @@
 
 #include "ua_tag/TagInitializer.h"
 #include "ua_tag/TagPoseConstraints.h"
+#include "ua_tag/TagEval.h"
 
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace ORB_SLAM3
 {
@@ -129,6 +132,18 @@ public:
     // 在线覆盖写入当前 TagMap（LocalMapping 更新 MapTag 后调用）
     void SaveTagMapOnline();
 
+    // MapTag 首次注册时写几何日志（LocalMapping 新建 Tag 后调用）
+    void LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id, int left_idx,
+                                    int right_idx, tag::MapTagData *pTag);
+
+    tag::TagEval *GetTagEval() { return mpTagEval.get(); }
+
+    // 复制 Tracking 轨迹历史的一致快照（持 mMutexTrajectory）。
+    void CopyTrajectorySnapshot(std::vector<Sophus::SE3f> &Tcr,
+                                std::vector<KeyFrame*> &refs,
+                                std::vector<double> &times,
+                                std::vector<bool> &lost);
+
     float GetImageScale();
 
 #ifdef REGISTER_LOOP
@@ -181,6 +196,7 @@ public:
     list<KeyFrame*> mlpReferences;
     list<double> mlFrameTimes;
     list<bool> mlbLost;
+    std::mutex mMutexTrajectory;
 
     // frames with estimated pose
     int mTrackedFr;
@@ -230,6 +246,13 @@ protected:
     void EstimateAndVisualizeTagPoses();
     void TrackAndExpandTagMap();
 
+    // ORB 已进入 OK 且当前帧位姿可靠后，每帧尝试 Tag 地图初始化（对齐到 ORB 世界系）
+    // 成功则强制创建关键帧并 Commit；返回 true 表示本帧已创建关键帧（勿再走普通 KF）
+    bool TryInitializeTagMapAfterOrbTracking();
+
+    // Tag 地图初始化成功后的导出/日志收尾（Stereo init 与后初始化共用）
+    void OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF);
+
     // 统一 pose-only 入口：useTags 且开关开启时构建 Tag 快照并联合优化（入口内重置优化外点）
     int OptimizeCurrentPose(bool useTags);
 
@@ -258,7 +281,9 @@ protected:
     void SearchLocalPoints();
 
     bool NeedNewKeyFrame();
-    void CreateNewKeyFrame();
+    // tagInitResult 非空时：AddKeyFrame → CommitTagInitialization → InsertKeyFrame
+    // 返回 true 表示已创建并提交关键帧
+    bool CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResult = nullptr);
 
     // Perform preintegration from last frame
     void PreintegrateIMU();
@@ -301,7 +326,7 @@ protected:
     // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
     ua_tag::AprilTagDetector* mpAprilTagDetector;
 
-    // Tag 模块（初始化挂在 MonocularInitialization；跟踪使用 eTrackingState）
+    // Tag 模块（StereoInitialization 首次尝试；失败后由 TryInitializeTagMapAfterOrbTracking 重试）
     tag::TagInitializer* mpTagInitializer;
     tag::TagTracker* mpTagTracker;
     tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
@@ -410,6 +435,7 @@ protected:
 
     // Tag 联合 PoseOptimization（默认关闭；见 Tag.pose_optimization）
     tag::TagPoseOptParams mTagPoseOptParams;
+    std::unique_ptr<tag::TagEval> mpTagEval;
 
     std::ofstream mOnlinePoseFile;
 
