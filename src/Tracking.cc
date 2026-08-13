@@ -2139,6 +2139,8 @@ void Tracking::TagTrack()
     //     return;
 
     EstimateAndVisualizeTagPoses();
+    if(mpTagTracker)
+        mpTagTracker->LogTagDetections(mCurrentFrame);
 #endif
 }
 
@@ -2604,13 +2606,21 @@ void Tracking::Track()
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_StartNewKF = std::chrono::steady_clock::now();
 #endif
-            bool bNeedKF = NeedNewKeyFrame();
+            // ORB 跟踪成功后每帧尝试 Tag 地图后初始化；成功帧强制关键帧，跳过普通 KF 判定
+            bool tagInitCreatedKF = false;
+            if(bOK && mState == OK)
+                tagInitCreatedKF = TryInitializeTagMapAfterOrbTracking();
 
-            // Check if we need to insert a new keyframe
-            // if(bNeedKF && bOK)
-            if(bNeedKF && (bOK || (mInsertKFsLost && mState==RECENTLY_LOST &&
-                                   (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))))
-                CreateNewKeyFrame();
+            if(!tagInitCreatedKF)
+            {
+                bool bNeedKF = NeedNewKeyFrame();
+
+                // Check if we need to insert a new keyframe
+                // if(bNeedKF && bOK)
+                if(bNeedKF && (bOK || (mInsertKFsLost && mState==RECENTLY_LOST &&
+                                       (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))))
+                    CreateNewKeyFrame();
+            }
 
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndNewKF = std::chrono::steady_clock::now();
@@ -2843,23 +2853,8 @@ void Tracking::StereoInitialization()
 
         mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
 
-        if(tagInitOK && mpTagTracker && pMap && pMap->IsTagInitialized())
-        {
-            mpTagTracker->SeedLastPose(mCurrentFrame.GetPose());
-            mpTagTracker->LogCameraPose(mCurrentFrame);
-
-            std::vector<Eigen::Vector3f> orb_pts;
-            const auto vpMPs = mpAtlas->GetAllMapPoints();
-            orb_pts.reserve(vpMPs.size());
-            for(MapPoint *pMP : vpMPs)
-            {
-                if(pMP)
-                    orb_pts.push_back(pMP->GetWorldPos());
-            }
-            std::vector<std::pair<double, Sophus::SE3f>> orb_kf_tcw;
-            orb_kf_tcw.emplace_back(pKFini->mTimeStamp, pKFini->GetPose());
-            mpTagTracker->SaveInitMaps(*pMap, orb_pts, orb_kf_tcw);
-        }
+        if(tagInitOK && pMap && pMap->IsTagInitialized())
+            OnTagMapInitialized(pMap, pKFini);
 
         mState=OK;
     }
@@ -3670,15 +3665,16 @@ bool Tracking::NeedNewKeyFrame()
         return false;
 }
 
-void Tracking::CreateNewKeyFrame()
+bool Tracking::CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResult)
 {
     if(mpLocalMapper->IsInitializing() && !mpAtlas->isImuInitialized())
-        return;
+        return false;
 
     if(!mpLocalMapper->SetNotStop(true))
-        return;
+        return false;
 
-    KeyFrame* pKF = new KeyFrame(mCurrentFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+    Map *pMap = mpAtlas->GetCurrentMap();
+    KeyFrame* pKF = new KeyFrame(mCurrentFrame,pMap,mpKeyFrameDB);
 
     if(mpAtlas->isImuInitialized()) //  || mpLocalMapper->IsInitializing())
         pKF->bImu = true;
@@ -3755,7 +3751,7 @@ void Tracking::CreateNewKeyFrame()
                         x3D = mCurrentFrame.UnprojectStereoFishEye(i);
                     }
 
-                    MapPoint* pNewMP = new MapPoint(x3D,pKF,mpAtlas->GetCurrentMap());
+                    MapPoint* pNewMP = new MapPoint(x3D,pKF,pMap);
                     pNewMP->AddObservation(pKF,i);
 
                     //Check if it is a stereo observation in order to not
@@ -3788,6 +3784,21 @@ void Tracking::CreateNewKeyFrame()
         }
     }
 
+    // Tag 后初始化：须在 InsertKeyFrame 之前完成 AddKeyFrame + Commit
+    // （CheckMapTagAssociations 要求 KF 已在 Map 的 keyframe set 中）
+    if(tagInitResult && mpTagInitializer && pMap)
+    {
+        mpAtlas->AddKeyFrame(pKF);
+        if(mpTagInitializer->CommitTagInitialization(*tagInitResult, pMap, {pKF}))
+        {
+            OnTagMapInitialized(pMap, pKF);
+        }
+        else
+        {
+            std::cout << "[TagInitRetry] commit failed"
+                      << " frame_id=" << mCurrentFrame.mnId << std::endl;
+        }
+    }
 
     mpLocalMapper->InsertKeyFrame(pKF);
 
@@ -3795,6 +3806,81 @@ void Tracking::CreateNewKeyFrame()
 
     mnLastKeyFrameId = mCurrentFrame.mnId;
     mpLastKeyFrame = pKF;
+    return true;
+}
+
+void Tracking::OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF)
+{
+    if(!pMap || !pInitKF || !pMap->IsTagInitialized())
+        return;
+
+    if(!mpTagTracker)
+        return;
+
+    mpTagTracker->SeedLastPose(mCurrentFrame.GetPose());
+    mpTagTracker->LogCameraPose(mCurrentFrame);
+    // 初始化 Commit 的 MapTag：在此帧完成首次注册，记录面积/距离/夹角
+    mpTagTracker->LogKeyFrameMapTagFirstRegistrations(pInitKF);
+
+    std::vector<Eigen::Vector3f> orb_pts;
+    const auto vpMPs = mpAtlas->GetAllMapPoints();
+    orb_pts.reserve(vpMPs.size());
+    for(MapPoint *pMP : vpMPs)
+    {
+        if(pMP)
+            orb_pts.push_back(pMP->GetWorldPos());
+    }
+    std::vector<std::pair<double, Sophus::SE3f>> orb_kf_tcw;
+    orb_kf_tcw.emplace_back(pInitKF->mTimeStamp, pInitKF->GetPose());
+    mpTagTracker->SaveInitMaps(*pMap, orb_pts, orb_kf_tcw);
+}
+
+bool Tracking::TryInitializeTagMapAfterOrbTracking()
+{
+    Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+
+    if(!mpTagInitializer ||
+       !pMap ||
+       pMap->IsTagInitialized() ||
+       mState != OK ||
+       mbOnlyTracking ||
+       !mCurrentFrame.isSet() ||
+       mCurrentFrame.mTagFrameData.Empty())
+    {
+        return false;
+    }
+
+    // 仅双目：已有米制尺度，可用单帧初始化并对齐到 ORB 世界系
+    if(mSensor != System::STEREO && mSensor != System::IMU_STEREO)
+        return false;
+
+    // 必须先保存 ORB 位姿；禁止用 Tag 结果覆盖当前帧
+    const Sophus::SE3f Tcw_orb = mCurrentFrame.GetPose();
+
+    tag::TagInitializer::Result result;
+    if(!mpTagInitializer->TryInitialize(
+           mCurrentFrame, mCurrentFrame, result,
+           tag::TagInitializer::InitMode::Stereo))
+    {
+        return false;
+    }
+
+    if(!mpTagInitializer->AlignResultToOrbWorld(result, Tcw_orb))
+        return false;
+
+    // CreateNewKeyFrame 内含 LocalMapper 保护；失败则丢弃 Result，下帧重试
+    if(!CreateNewKeyFrame(&result))
+        return false;
+
+    if(pMap->IsTagInitialized())
+    {
+        std::cout << "[TagInitRetry] succeeded"
+                  << " frame_id=" << mCurrentFrame.mnId
+                  << " tags=" << pMap->MapTagsInMap() << std::endl;
+    }
+
+    // 本帧已创建关键帧（无论 commit 成败），避免再走普通 NeedNewKeyFrame
+    return true;
 }
 
 void Tracking::SearchLocalPoints()
@@ -4541,6 +4627,15 @@ void Tracking::SaveTagMapOnline()
     Map *pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
     if(mpTagTracker && pMap)
         mpTagTracker->SaveTagMapOnline(*pMap);
+}
+
+void Tracking::LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id,
+                                          int left_idx, int right_idx,
+                                          tag::MapTagData *pTag)
+{
+    if(mpTagTracker)
+        mpTagTracker->LogMapTagFirstRegistration(pKF, tag_id, left_idx,
+                                                 right_idx, pTag);
 }
 
 void Tracking::SaveSubTrajectory(string strNameFile_frames, string strNameFile_kf, string strFolder)

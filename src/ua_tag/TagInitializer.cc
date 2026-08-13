@@ -696,6 +696,32 @@ bool TagInitializer::TryInitialize(Frame &first_frame, Frame &second_frame,
     return TryInitializeTwoFrames(second_frame, first_frame, common_obs, result);
 }
 
+bool TagInitializer::AlignResultToOrbWorld(Result &result,
+                                           const Sophus::SE3f &Tcw_orb) const
+{
+    if(result.tags.empty() || !result.from_single_frame)
+        return false;
+
+    const Sophus::SE3f Twc_orb = Tcw_orb.inverse();
+    for(auto &kv : result.tags)
+    {
+        if(!kv.second || !kv.second->HasPose())
+            return false;
+
+        // TryInitializeSingleFrame 写入的是 T_ct（Tag world := 当前左相机）
+        const Sophus::SE3f T_ct = kv.second->GetPose();
+        kv.second->SetPose(Twc_orb * T_ct);
+    }
+
+    result.Tcw_current = {Tcw_orb};
+
+    if(mbVerbose)
+        std::cout << "[TagInitializer] AlignResultToOrbWorld succeeded"
+                  << " tags=" << result.tags.size() << std::endl;
+
+    return true;
+}
+
 bool TagInitializer::CommitTagInitialization(const Result &result, Map *pMap,
                                              const std::vector<KeyFrame *> &vpKFs) const
 {

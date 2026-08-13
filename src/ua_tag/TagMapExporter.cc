@@ -3,10 +3,14 @@
 #include "KeyFrame.h"
 #include "Map.h"
 #include "ua_tag/MapTagData.h"
+#include "ua_tag/TagFrameData.h"
+#include "ua_tag/TagObservation.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <vector>
@@ -43,7 +47,10 @@ TagMapExporter::TagMapExporter(const std::string &output_dir)
         return;
     }
 
-    mbEnabled = OpenTrajectoryFile();
+    const bool traj_ok = OpenTrajectoryFile();
+    const bool det_ok = OpenDetectionLogFile();
+    const bool first_ok = OpenFirstRegistrationLogFile();
+    mbEnabled = traj_ok || det_ok || first_ok;
     if(mbEnabled)
         std::cout << "[TagMapExporter] export dir=" << mOutputDir << std::endl;
 }
@@ -67,6 +74,39 @@ bool TagMapExporter::OpenTrajectoryFile()
     return true;
 }
 
+bool TagMapExporter::OpenDetectionLogFile()
+{
+    const std::string path = mOutputDir + "/tag_detections.csv";
+    mDetFile.open(path.c_str(), std::ios::out | std::ios::trunc);
+    if(!mDetFile.is_open())
+    {
+        std::cerr << "[TagMapExporter] failed to open: " << path << std::endl;
+        return false;
+    }
+    mDetFile << std::setprecision(9);
+    mDetFile << "frame_id,timestamp,camera,tag_id,"
+             << "observed_area,observed_perimeter,hamming,"
+             << "cx,cy,"
+             << "x0,y0,x1,y1,x2,y2,x3,y3\n";
+    return true;
+}
+
+bool TagMapExporter::OpenFirstRegistrationLogFile()
+{
+    const std::string path = mOutputDir + "/tag_first_registration.csv";
+    mFirstRegFile.open(path.c_str(), std::ios::out | std::ios::trunc);
+    if(!mFirstRegFile.is_open())
+    {
+        std::cerr << "[TagMapExporter] failed to open: " << path << std::endl;
+        return false;
+    }
+    mFirstRegFile << "kf_id,frame_id,timestamp,tag_id,camera,"
+                  << "map_has_pose,pose_source,observed_area,distance_m,"
+                  << "axis_plane_angle_deg,axis_normal_angle_deg,"
+                  << "nx,ny,nz,tx,ty,tz\n";
+    return true;
+}
+
 void TagMapExporter::AppendCameraPose(unsigned long frame_id,
                                       double timestamp,
                                       const Sophus::SE3f &Tcw)
@@ -82,6 +122,191 @@ void TagMapExporter::AppendCameraPose(unsigned long frame_id,
     mTrajFile << std::setprecision(6) << timestamp << " "
               << std::setprecision(9) << t.x() << " " << t.y() << " " << t.z() << " "
               << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+}
+
+void TagMapExporter::AppendTagDetections(unsigned long frame_id,
+                                         double timestamp,
+                                         const TagFrameData &frame_data)
+{
+    if(!mbEnabled || !mDetFile.is_open() || frame_data.Empty())
+        return;
+
+    auto write_obs = [&](const TagObservation &obs, const char *cam) {
+        if(!obs.IsDetectValid())
+            return;
+
+        float cx = 0.0f;
+        float cy = 0.0f;
+        for(const cv::Point2f &p : obs.corners_raw)
+        {
+            cx += p.x;
+            cy += p.y;
+        }
+        cx *= 0.25f;
+        cy *= 0.25f;
+
+        mDetFile << frame_id << ","
+                 << std::setprecision(6) << timestamp << ","
+                 << cam << ","
+                 << obs.tag_id << ","
+                 << std::setprecision(3) << obs.observed_area << ","
+                 << obs.observed_perimeter << ","
+                 << obs.hamming << ","
+                 << cx << "," << cy;
+        for(const cv::Point2f &p : obs.corners_raw)
+            mDetFile << "," << p.x << "," << p.y;
+        mDetFile << "\n";
+    };
+
+    for(const TagObservation &obs : frame_data.left)
+        write_obs(obs, "left");
+    for(const TagObservation &obs : frame_data.right)
+        write_obs(obs, "right");
+}
+
+void TagMapExporter::AppendMapTagFirstRegistration(KeyFrame *pKF,
+                                                   int tag_id,
+                                                   int left_idx,
+                                                   int right_idx,
+                                                   MapTagData *pTag)
+{
+    if(!mbEnabled || !mFirstRegFile.is_open() || !pKF || tag_id < 0)
+        return;
+
+    const Sophus::SE3f Tcw = pKF->GetPose();
+    const Sophus::SE3f Tlr = pKF->GetRelativePoseTlr();
+    constexpr float kRad2Deg = 180.0f / 3.14159265358979323846f;
+    const bool map_has_pose = pTag && pTag->HasPose();
+
+    auto resolve_Tct = [&](const TagObservation &obs, bool is_right,
+                           Sophus::SE3f &T_ct, const char *&pose_source) -> bool {
+        if(obs.pose_estimate.has_value() && obs.pose_estimate->Selected())
+        {
+            T_ct = obs.pose_estimate->Selected()->T_ct;
+            pose_source = "selected";
+            return true;
+        }
+        if(obs.pose_estimate.has_value())
+        {
+            int best = -1;
+            float best_err = std::numeric_limits<float>::infinity();
+            for(int i = 0; i < 2; ++i)
+            {
+                const TagPoseCandidate &c = obs.pose_estimate->candidates[i];
+                if(!c.valid)
+                    continue;
+                if(c.reprojection_error >= 0.0f &&
+                   c.reprojection_error < best_err)
+                {
+                    best_err = c.reprojection_error;
+                    best = i;
+                }
+            }
+            if(best >= 0)
+            {
+                T_ct = obs.pose_estimate->candidates[best].T_ct;
+                pose_source = "best_ippe";
+                return true;
+            }
+        }
+        if(map_has_pose)
+        {
+            if(is_right)
+                T_ct = Tlr.inverse() * Tcw * pTag->GetPose();
+            else
+                T_ct = Tcw * pTag->GetPose();
+            pose_source = "map_twt";
+            return true;
+        }
+        pose_source = "none";
+        return false;
+    };
+
+    auto write_one = [&](const TagObservation &obs, const char *cam,
+                         bool is_right) {
+        if(!obs.IsDetectValid())
+            return;
+
+        Sophus::SE3f T_ct;
+        const char *pose_source = "none";
+        const bool have_T = resolve_Tct(obs, is_right, T_ct, pose_source);
+
+        mFirstRegFile << pKF->mnId << ","
+                      << pKF->mnFrameId << ","
+                      << std::setprecision(6) << pKF->mTimeStamp << ","
+                      << tag_id << ","
+                      << cam << ","
+                      << (map_has_pose ? 1 : 0) << ","
+                      << pose_source << ","
+                      << std::setprecision(3) << obs.observed_area << ",";
+
+        if(have_T)
+        {
+            const Eigen::Matrix3f R = T_ct.rotationMatrix();
+            const Eigen::Vector3f t = T_ct.translation();
+            Eigen::Vector3f n = R.col(2);
+            const float n_norm = n.norm();
+            if(n_norm < 1e-8f)
+            {
+                mFirstRegFile << ",,,,,,,,\n";
+                return;
+            }
+            n /= n_norm;
+            const float abs_cos = std::min(1.0f, std::abs(n.z()));
+            const float axis_plane_deg = std::asin(abs_cos) * kRad2Deg;
+            const float axis_normal_deg = std::acos(abs_cos) * kRad2Deg;
+            const float distance_m = t.norm();
+
+            mFirstRegFile << std::setprecision(6) << distance_m << ","
+                          << axis_plane_deg << ","
+                          << axis_normal_deg << ","
+                          << n.x() << "," << n.y() << "," << n.z() << ","
+                          << t.x() << "," << t.y() << "," << t.z() << "\n";
+
+            std::cout << "[TagFirstReg] tag_id=" << tag_id
+                      << " cam=" << cam
+                      << " kf_id=" << pKF->mnId
+                      << " area=" << obs.observed_area
+                      << " dist_m=" << distance_m
+                      << " axis_plane_deg=" << axis_plane_deg
+                      << " axis_normal_deg=" << axis_normal_deg
+                      << " pose_source=" << pose_source
+                      << std::endl;
+        }
+        else
+        {
+            mFirstRegFile << ",,,,,,,,\n";
+            std::cout << "[TagFirstReg] tag_id=" << tag_id
+                      << " cam=" << cam
+                      << " kf_id=" << pKF->mnId
+                      << " area=" << obs.observed_area
+                      << " pose_source=none"
+                      << std::endl;
+        }
+    };
+
+    if(left_idx >= 0 &&
+       left_idx < static_cast<int>(pKF->mTagFrameData.left.size()))
+        write_one(pKF->mTagFrameData.left[left_idx], "left", false);
+    if(right_idx >= 0 &&
+       right_idx < static_cast<int>(pKF->mTagFrameData.right.size()))
+        write_one(pKF->mTagFrameData.right[right_idx], "right", true);
+
+    mFirstRegFile.flush();
+}
+
+void TagMapExporter::LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF)
+{
+    if(!mbEnabled || !mFirstRegFile.is_open() || !pKF)
+        return;
+
+    const auto associations = pKF->GetMapTagAssociations();
+    for(const auto &kv : associations)
+    {
+        const KeyFrame::MapTagAssociation &assoc = kv.second;
+        AppendMapTagFirstRegistration(pKF, kv.first, assoc.leftObservationIndex,
+                                      assoc.rightObservationIndex, assoc.pMapTag);
+    }
 }
 
 bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
@@ -262,6 +487,16 @@ void TagMapExporter::CloseTrajectory()
     {
         mTrajFile.flush();
         mTrajFile.close();
+    }
+    if(mDetFile.is_open())
+    {
+        mDetFile.flush();
+        mDetFile.close();
+    }
+    if(mFirstRegFile.is_open())
+    {
+        mFirstRegFile.flush();
+        mFirstRegFile.close();
     }
 }
 

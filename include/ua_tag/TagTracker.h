@@ -13,10 +13,12 @@
 namespace ORB_SLAM3 {
 
 class Frame;
+class KeyFrame;
 class Map;
 
 namespace tag {
 
+class MapTagData;
 class TagMapExporter;
 
 class TagTracker
@@ -43,6 +45,16 @@ public:
 
     // 若开启导出：记录当前帧相机 Pose 轨迹
     void LogCameraPose(const Frame &frame);
+
+    // 若开启导出：记录本帧 AprilTag 检测（含观测面积）到 tag_detections.csv
+    void LogTagDetections(const Frame &frame);
+
+    // 若开启导出：MapTag 首次注册时追加 tag_first_registration.csv
+    void LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id, int left_idx,
+                                    int right_idx, MapTagData *pTag);
+
+    // 若开启导出：初始化 Commit 后，对初始化 KF 上全部 MapTag 记首次注册几何
+    void LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF);
 
     // 若开启导出：写出 MapTag 四角点，并关闭轨迹文件
     void SaveExports(Map &map);

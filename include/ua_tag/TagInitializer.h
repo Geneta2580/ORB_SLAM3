@@ -101,6 +101,12 @@ public:
     bool CommitTagInitialization(const Result &result, Map *pMap,
                                  const std::vector<KeyFrame *> &vpKFs) const;
 
+    // 将单帧 Tag 初始化结果从「当前左相机 = Tag 世界」对齐到已有 ORB 世界系。
+    // 约定：result.from_single_frame==true，且各 MapTag::GetPose() 仍为 T_ct（Tag→当前左相机）。
+    // 变换：T_wt_orb = Tcw_orb.inverse() * T_ct；并写回 result.Tcw_current = {Tcw_orb}。
+    // 不修改传入的 Frame / ORB 相机位姿。
+    bool AlignResultToOrbWorld(Result &result, const Sophus::SE3f &Tcw_orb) const;
+
     // 单帧：frame 中无歧义/有效 IPPE 的 Tag 数 >= 3 则成功。
     // Stereo 与 Monocular 单帧子路径内部调用。
     bool TryInitializeSingleFrame(Frame &frame, Result &result);

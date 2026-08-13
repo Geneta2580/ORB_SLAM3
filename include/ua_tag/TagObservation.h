@@ -2,6 +2,7 @@
 #define UA_TAG_TAG_OBSERVATION_H
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 
@@ -65,9 +66,14 @@ struct TagObservation
     std::array<cv::Point2f, 4> corners_undistorted{};
 
     // 解码质量：bit 强度相对判决阈值的平均裕度，越大越可靠
+    // ethz 无此字段时，DetectCorners 用 observed_perimeter 作为粗糙代理
     float decision_margin = 0.0f;
     // 解码时纠正的错误 bit 数，0 最好，越大误检风险越高
     int hamming = 0;
+
+    // 检测几何质量（原图像素）：四边形面积与周长
+    float observed_area = 0.0f;
+    float observed_perimeter = 0.0f;
 
     // nullopt: 尚未估计；有值: 已计算候选（未必已消歧）
     std::optional<TagPoseEstimate> pose_estimate;
@@ -85,6 +91,19 @@ struct TagObservation
     bool IsDetectValid() const noexcept
     {
         return tag_id >= 0 && !is_detect_outlier;
+    }
+
+    // 原图像素四边形面积（鞋带公式）；角点无效时返回 0
+    static float ComputeQuadArea(const std::array<cv::Point2f, 4> &corners) noexcept
+    {
+        float area2 = 0.0f;
+        for(int i = 0; i < 4; ++i)
+        {
+            const cv::Point2f &p0 = corners[static_cast<size_t>(i)];
+            const cv::Point2f &p1 = corners[static_cast<size_t>((i + 1) % 4)];
+            area2 += p0.x * p1.y - p1.x * p0.y;
+        }
+        return std::abs(area2) * 0.5f;
     }
 
     // 清除优化产生的临时外点（不影响 is_detect_outlier）

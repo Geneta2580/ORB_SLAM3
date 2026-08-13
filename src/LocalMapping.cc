@@ -898,6 +898,11 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
             continue;
         }
 
+        // 首次成功注册进地图：记录观测面积 / 距离 / 光轴夹角
+        if(created && mpTracker)
+            mpTracker->LogMapTagFirstRegistration(pKF, tag_id, left_idx,
+                                                  right_idx, pTag.get());
+
         // CANDIDATE：无 pose → 单帧消歧初值（成功即 ACTIVE）或多帧消歧；
         // 已有 pose 却仍为 CANDIDATE（旧逻辑残留）→ 直接晋升 ACTIVE
         if(pTag->GetState() == tag::MapTagState::CANDIDATE)
