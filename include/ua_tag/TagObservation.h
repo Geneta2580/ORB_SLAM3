@@ -51,6 +51,16 @@ struct TagPoseEstimate
         const TagPoseCandidate &candidate = candidates[selected_candidate];
         return candidate.valid ? &candidate : nullptr;
     }
+
+    // 消歧后未被选中的镜像 IPPE（另一候选 valid 时）
+    const TagPoseCandidate *Unselected() const noexcept
+    {
+        if(selected_candidate < 0 || selected_candidate >= 2)
+            return nullptr;
+
+        const TagPoseCandidate &candidate = candidates[1 - selected_candidate];
+        return candidate.valid ? &candidate : nullptr;
+    }
 };
 
 // 原始检测数据；pose_estimate 为空表示尚未做 IPPE / 消歧

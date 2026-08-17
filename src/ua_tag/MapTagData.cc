@@ -3,6 +3,30 @@
 namespace ORB_SLAM3 {
 namespace tag {
 
+namespace {
+
+std::array<Eigen::Vector3f, 4> CornersFromPose(const Sophus::SE3f &T_wt,
+                                               float tag_size)
+{
+    std::array<Eigen::Vector3f, 4> corners{};
+    if(tag_size <= 0.0f)
+        return corners;
+
+    // 与 OpenCV IPPE_SQUARE / BuildSquareObjectPoints 约定一致
+    const float h = tag_size * 0.5f;
+    const Eigen::Vector3f pts_t[4] = {
+        Eigen::Vector3f(-h,  h, 0.f),
+        Eigen::Vector3f( h,  h, 0.f),
+        Eigen::Vector3f( h, -h, 0.f),
+        Eigen::Vector3f(-h, -h, 0.f)};
+
+    for(int i = 0; i < 4; ++i)
+        corners[i] = T_wt * pts_t[i];
+    return corners;
+}
+
+}  // namespace
+
 int MapTagData::Id() const
 {
     std::unique_lock<std::mutex> lock(mMutexFeatures);
@@ -46,30 +70,51 @@ bool MapTagData::HasPose() const
     return mbHasPose;
 }
 
+void MapTagData::SetMirrorPose(const Sophus::SE3f &T_wt)
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    mTwtMirror = T_wt;
+    mbHasMirrorPose = true;
+}
+
+Sophus::SE3f MapTagData::GetMirrorPose() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mTwtMirror;
+}
+
+bool MapTagData::HasMirrorPose() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mbHasMirrorPose;
+}
+
 std::array<Eigen::Vector3f, 4> MapTagData::GetWorldCorners() const
 {
     std::unique_lock<std::mutex> lock(mMutexPose);
-    std::array<Eigen::Vector3f, 4> corners{};
-    if(!mbHasPose || mTagSize <= 0.0f)
-        return corners;
-
-    // 与 OpenCV IPPE_SQUARE / BuildSquareObjectPoints 约定一致
-    const float h = mTagSize * 0.5f;
-    const Eigen::Vector3f pts_t[4] = {
-        Eigen::Vector3f(-h,  h, 0.f),
-        Eigen::Vector3f( h,  h, 0.f),
-        Eigen::Vector3f( h, -h, 0.f),
-        Eigen::Vector3f(-h, -h, 0.f)};
-
-    for(int i = 0; i < 4; ++i)
-        corners[i] = mTwt * pts_t[i];
-    return corners;
+    if(!mbHasPose)
+        return {};
+    return CornersFromPose(mTwt, mTagSize);
 }
 
 bool MapTagData::HasWorldCorners() const
 {
     std::unique_lock<std::mutex> lock(mMutexPose);
     return mbHasPose && mTagSize > 0.0f;
+}
+
+std::array<Eigen::Vector3f, 4> MapTagData::GetMirrorWorldCorners() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    if(!mbHasMirrorPose)
+        return {};
+    return CornersFromPose(mTwtMirror, mTagSize);
+}
+
+bool MapTagData::HasMirrorWorldCorners() const
+{
+    std::unique_lock<std::mutex> lock(mMutexPose);
+    return mbHasMirrorPose && mTagSize > 0.0f;
 }
 
 void MapTagData::SetState(MapTagState state)

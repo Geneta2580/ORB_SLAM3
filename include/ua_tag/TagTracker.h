@@ -59,7 +59,7 @@ public:
     // 若开启导出：写出 MapTag 四角点，并关闭轨迹文件
     void SaveExports(Map &map);
 
-    // 若开启导出：在线覆盖写入 tag_map_corners.csv（静默）
+    // 若开启导出：在线覆盖写入 tag_map_corners.csv 与 tag_map_mirror_corners.csv（静默）
     void SaveTagMapOnline(Map &map);
 
     // 若开启导出：定标后立刻写出 MapTag + ORB 初始化点云/关键帧（尺度对比用）

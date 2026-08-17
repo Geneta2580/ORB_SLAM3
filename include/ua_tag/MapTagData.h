@@ -60,9 +60,16 @@ public:
     Sophus::SE3f GetPose() const;
     bool HasPose() const;
 
+    // 首次赋位姿时冻结的未选中 IPPE 镜像解（世界系 T_wt）；LBA 不更新
+    void SetMirrorPose(const Sophus::SE3f &T_wt);
+    Sophus::SE3f GetMirrorPose() const;
+    bool HasMirrorPose() const;
+
     // 按需计算：P_w = T_wt * P_t（需已有 pose 且 tag_size > 0）
     std::array<Eigen::Vector3f, 4> GetWorldCorners() const;
     bool HasWorldCorners() const;
+    std::array<Eigen::Vector3f, 4> GetMirrorWorldCorners() const;
+    bool HasMirrorWorldCorners() const;
 
     void SetState(MapTagState state);
     MapTagState GetState() const;
@@ -84,7 +91,7 @@ private:
     void EraseObservationInternal(KeyFrame *pKF);
     void SetMapInternal(Map *pMap);
 
-    // mMutexPose: mTwt / mbHasPose / mTagSize
+    // mMutexPose: mTwt / mbHasPose / mTwtMirror / mbHasMirrorPose / mTagSize
     mutable std::mutex mMutexPose;
     // mMutexFeatures: mObservations / mState；mpMap 由 Map 在持有 Map 锁时写入
     mutable std::mutex mMutexFeatures;
@@ -94,6 +101,9 @@ private:
 
     Sophus::SE3f mTwt;
     bool mbHasPose = false;
+
+    Sophus::SE3f mTwtMirror;
+    bool mbHasMirrorPose = false;
 
     MapTagState mState = MapTagState::CANDIDATE;
     KeyFrameObservations mObservations;

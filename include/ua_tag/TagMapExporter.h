@@ -23,7 +23,8 @@ class TagFrameData;
 class TagMapExporter
 {
 public:
-    // output_dir 下写入 tag_map_corners.csv / tag_camera_trajectory.txt(TUM)
+    // output_dir 下写入 tag_map_corners.csv / tag_map_mirror_corners.csv
+    //                    / tag_camera_trajectory.txt(TUM)
     //                    / tag_detections.csv（每帧检测）
     //                    / tag_first_registration.csv（每个 MapTag 首次注册时几何）
     explicit TagMapExporter(const std::string &output_dir);
@@ -57,6 +58,7 @@ public:
     void LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF);
 
     // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标（可重复调用覆盖）
+    // 同时写出 tag_map_mirror_corners.csv（首次赋位姿时未选中的 IPPE 镜像解）
     // verbose=false 用于在线更新，避免刷屏
     bool SaveTagMapCorners(Map &map, bool verbose = true) const;
 
@@ -76,6 +78,8 @@ private:
     bool OpenTrajectoryFile();
     bool OpenDetectionLogFile();
     bool OpenFirstRegistrationLogFile();
+    bool WriteTagCornersCsv(Map &map, const std::string &filename, bool mirror,
+                            bool verbose) const;
 
     std::string mOutputDir;
     bool mbEnabled{false};

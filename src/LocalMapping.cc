@@ -454,6 +454,12 @@ bool LocalMapping::InitializeMapTagPose(tag::MapTagData *pTag, KeyFrame *pKF,
             obs->camera_id, sel->T_ct, pKF->GetRelativePoseTlr());
         // T_wt = Twc * T_cL_t（左目锚定）
         pTag->SetPose(pKF->GetPoseInverse() * T_cL_t);
+        if(const tag::TagPoseCandidate *mir = obs->pose_estimate->Unselected())
+        {
+            const Sophus::SE3f T_cL_m = tag::ExpressTagPoseInLeftCamera(
+                obs->camera_id, mir->T_ct, pKF->GetRelativePoseTlr());
+            pTag->SetMirrorPose(pKF->GetPoseInverse() * T_cL_m);
+        }
         // 已消歧的单帧初值：直接 ACTIVE，可进 LBA / PoseOpt（勿停在 CANDIDATE）
         pTag->SetState(tag::MapTagState::ACTIVE);
 
@@ -775,6 +781,10 @@ bool LocalMapping::TryResolveMapTagAmbiguityMultiFrame(tag::MapTagData *pTag) co
     // 回写选中 IPPE 到源观测，切换 Tag 状态为 ACTIVE
     pTag->SetPose(T_wt);
     pTag->SetState(tag::MapTagState::ACTIVE);
+
+    Sophus::SE3f T_wt_mirror;
+    if(recomputeWorldPose(mirror, T_wt_mirror))
+        pTag->SetMirrorPose(T_wt_mirror);
 
     const Sophus::SE3f T_ct_sel =
         best.obs->pose_estimate->candidates[best.cand_idx].T_ct;

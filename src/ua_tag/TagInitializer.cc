@@ -464,6 +464,11 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
         map_tag->SetId(tag_id);
         map_tag->SetTagSize(static_cast<float>(mTagSize));
         map_tag->SetPose(T_wt);
+        if(const TagPoseCandidate *mir = obs.pose_estimate->Unselected())
+        {
+            map_tag->SetMirrorPose(
+                ExpressTagPoseInLeftCamera(obs.camera_id, mir->T_ct, T_lr));
+        }
         // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
         map_tag->SetState(MapTagState::ACTIVE);
         // 观测角点留在 Frame/KeyFrame::mTagFrameData；不向 MapTag 复制
@@ -628,6 +633,15 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
         map_tag->SetId(tag_id);
         map_tag->SetTagSize(static_cast<float>(mTagSize));
         map_tag->SetPose(T_wt);
+        if(obs_ref_ptr->pose_estimate.has_value())
+        {
+            if(const TagPoseCandidate *mir = obs_ref_ptr->pose_estimate->Unselected())
+            {
+                map_tag->SetMirrorPose(ExpressTagPoseInLeftCamera(
+                    obs_ref_ptr->camera_id, mir->T_ct,
+                    ref_frame.GetRelativePoseTlr()));
+            }
+        }
         // 系统自估世界位姿：ACTIVE（可后续 LBA 优化）。FIXED_ANCHOR 仅留给外部可信 Tag map。
         map_tag->SetState(MapTagState::ACTIVE);
         out.tags.emplace(tag_id, std::move(map_tag));
@@ -711,6 +725,11 @@ bool TagInitializer::AlignResultToOrbWorld(Result &result,
         // TryInitializeSingleFrame 写入的是 T_ct（Tag world := 当前左相机）
         const Sophus::SE3f T_ct = kv.second->GetPose();
         kv.second->SetPose(Twc_orb * T_ct);
+        if(kv.second->HasMirrorPose())
+        {
+            const Sophus::SE3f T_ct_m = kv.second->GetMirrorPose();
+            kv.second->SetMirrorPose(Twc_orb * T_ct_m);
+        }
     }
 
     result.Tcw_current = {Tcw_orb};

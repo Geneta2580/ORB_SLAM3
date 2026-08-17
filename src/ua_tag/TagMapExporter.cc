@@ -311,13 +311,23 @@ void TagMapExporter::LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF)
 
 bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
 {
+    const bool sel_ok =
+        WriteTagCornersCsv(map, "tag_map_corners.csv", false, verbose);
+    const bool mir_ok =
+        WriteTagCornersCsv(map, "tag_map_mirror_corners.csv", true, verbose);
+    return sel_ok && mir_ok;
+}
+
+bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
+                                        bool mirror, bool verbose) const
+{
     if(mOutputDir.empty())
         return false;
 
     if(!EnsureDir(mOutputDir))
         return false;
 
-    const std::string path = mOutputDir + "/tag_map_corners.csv";
+    const std::string path = mOutputDir + "/" + filename;
     std::ofstream ofs(path.c_str(), std::ios::out | std::ios::trunc);
     if(!ofs.is_open())
     {
@@ -349,13 +359,16 @@ bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
         if(!map_tag)
             continue;
 
+        const bool has_corners = mirror ? map_tag->HasMirrorWorldCorners()
+                                        : map_tag->HasWorldCorners();
         ofs << map_tag->Id() << ","
             << (map_tag->IsFixed() ? 1 : 0) << ","
-            << (map_tag->HasWorldCorners() ? 1 : 0);
+            << (has_corners ? 1 : 0);
 
-        if(map_tag->HasWorldCorners())
+        if(has_corners)
         {
-            const auto c = map_tag->GetWorldCorners();
+            const auto c = mirror ? map_tag->GetMirrorWorldCorners()
+                                  : map_tag->GetWorldCorners();
             for(int i = 0; i < 4; ++i)
                 ofs << "," << c[i].x() << "," << c[i].y() << "," << c[i].z();
             ++n_with_corners;
@@ -370,7 +383,9 @@ bool TagMapExporter::SaveTagMapCorners(Map &map, bool verbose) const
     ofs.close();
     if(verbose)
     {
-        std::cout << "[TagMapExporter] saved tag map corners -> " << path
+        std::cout << "[TagMapExporter] saved "
+                  << (mirror ? "tag map mirror corners" : "tag map corners")
+                  << " -> " << path
                   << " num_tags=" << tags.size()
                   << " with_corners=" << n_with_corners << std::endl;
     }

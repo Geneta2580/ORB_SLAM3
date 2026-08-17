@@ -90,7 +90,7 @@ ORBextractor.minThFAST: 7
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------
-Viewer.enable: 1
+Viewer.enable: 0
 Viewer.KeyFrameSize: 0.05
 Viewer.KeyFrameLineWidth: 1.0
 Viewer.GraphLineWidth: 0.9
@@ -122,7 +122,7 @@ Tag.viewer: 0
 Tag.save_vis: 0
 Tag.save_vis_dir: "tag_vis"
 Tag.show_in_orb_viewer: 1
-Tag.pose_optimization: 1
+Tag.pose_optimization: 0
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
 Tag.fixed_only: 0
