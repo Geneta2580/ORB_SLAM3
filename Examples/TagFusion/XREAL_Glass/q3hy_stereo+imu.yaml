@@ -1,24 +1,28 @@
 %YAML:1.0
 
 #--------------------------------------------------------------------------------------------
-# XREAL Glass cam0+cam1 — TagFusion stereo
-# Dataset: q3hy/20260807/der_pat_led_f (SN L623X00088)
+# XREAL Glass cam0+cam1+imu0 — TagFusion stereo-inertial
+# Dataset: q3hy/20260807 (SN L623X00088)
 #
-# Path layout (与 stereo_xreal_glass_tag 搜索逻辑兼容，任选其一作为 argv[3]):
-#   .../der_pat_led_f/01-1
-#   .../der_pat_led_f/01-1/raw_data/glass
-#   .../der_pat_led_f/01-1/raw_data/glass/cam0/images
+# Path layout（与 stereo_inertial_xreal_glass_tag 搜索逻辑兼容）:
+#   .../01-1
+#   .../01-1/raw_data/glass
+#   .../01-1/raw_data/glass/cam0/images
 #
 # Resolved as:
 #   .../raw_data/glass/cam0/images  +  .../raw_data/glass/cam1/images
+#   .../raw_data/glass/imu0.txt
 #   timestamps.txt: "m0000000.pgm <t>"（左右同名）
+#   imu0.txt: "<t> <temp> gx gy gz ax ay az"  （rad/s, m/s^2）
 #
 # Intrinsics / extrinsics from:
 #   .../01-1/ground_truth/calib/calib.yaml
 # Camera.model: fisheye6202 → ORB-SLAM3 KannalaBrandt8 使用 kc[0:4] 近似
 # Stereo.T_c1_c2 由 cam0_q_cam1 (Hamilton qx,qy,qz,qw) + cam0_p_cam1 构成
-# Resolution (W x H): 640 x 512  （注意：不是旧样例的 480x640，勿直接复用旧内参）
-# FPS: ~60
+# IMU.T_b_c1 由 cam0 的 imu_q_cam / imu_p_cam 构成（body = imu0）
+# Resolution (W x H): 640 x 512
+# Camera FPS: ~60
+# IMU: imu0.txt 实测 ~1000 Hz（勿写成 200）
 #--------------------------------------------------------------------------------------------
 
 File.version: "1.0"
@@ -79,6 +83,28 @@ Stereo.T_c1_c2: !!opencv-matrix
           0.0, 0.0, 0.0, 1.0]
 
 #--------------------------------------------------------------------------------------------
+# IMU Parameters  （body = imu0；T_b_c1 = calib.yaml cam0 的 imu_q_cam / imu_p_cam）
+# imu0.txt 实测约 1000 Hz（mean dt=0.001s），不是 200 Hz。
+# 噪声与 calib.yaml imu_noises 一致：
+#   [gyro_sigma, gyro_walk, accel_sigma, accel_walk]
+#--------------------------------------------------------------------------------------------
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [ 0.999758837028498, -0.018769980097049,  0.011399808357268, -0.008043468281928,
+          -0.018768590495112, -0.999823828294885, -0.000228876794367,  0.004440908525239,
+           0.011402096046466,  0.000014863262979, -0.999934993879517, -0.004496215845058,
+           0.0, 0.0, 0.0, 1.0]
+
+IMU.NoiseGyro: 3.5e-04
+IMU.NoiseAcc: 6.67e-03
+IMU.GyroWalk: 1.0e-05
+IMU.AccWalk: 6.8e-04
+IMU.Frequency: 1000.0
+IMU.InsertKFsWhenLost: 1
+
+#--------------------------------------------------------------------------------------------
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
 ORBextractor.nFeatures: 1200
@@ -90,7 +116,7 @@ ORBextractor.minThFAST: 7
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------
-Viewer.enable: 0
+Viewer.enable: 1
 Viewer.KeyFrameSize: 0.05
 Viewer.KeyFrameLineWidth: 1.0
 Viewer.GraphLineWidth: 0.9
@@ -112,7 +138,7 @@ Tag.family: "tag36h11"
 Tag.hamming: 2
 Tag.black_border: 1
 Tag.size: 0.144
-Tag.gamma: 1.0                  # <1 提亮暗部；1=关闭
+Tag.gamma: 0.5                  # <1 提亮暗部；1=关闭。已取消 CLAHE
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"

@@ -116,9 +116,7 @@ Tag.family: "tag36h11"          # tag36h11/tag36h9/tag25h9/tag25h7/tag16h5
 Tag.hamming: 2                  # 接受的最大 hammingDistance（召回可试 2；正式可收紧到 1）
 Tag.black_border: 2             # ethz TagDetector blackBorder；标准印刷 tag36h11 一般为 1
 Tag.size: 0.06                  # Tag 边长（米），IPPE 用
-Tag.clahe: 0                    # 检测前 CLAHE（小/暗 tag 可开；噪声大可关）
-Tag.clahe_clip_limit: 2.0
-Tag.clahe_tile_grid: 8
+Tag.gamma: 1.0                  # <1 提亮暗部；1=关闭
 Tag.verbose: 1
 Tag.export: 1                  # 1=导出；初始化定标后写 TagMap+ORB 初始地图到 Tag.export_dir
 Tag.export_dir: "tag_export"   # tag_map_corners.csv / orb_init_map_points.csv / *_keyframes_tum.txt

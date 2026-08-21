@@ -96,3 +96,6 @@ borrar/*
 tag_export/
 tag_vis/
 OnlineCameraTrajectory.txt
+imu_pose.txt
+Examples/TagFusion/XREAL_Glass/log.txt
+Examples/TagFusion/XREAL_Glass/log_*.txt
