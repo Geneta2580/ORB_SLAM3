@@ -133,6 +133,9 @@ public:
     void LogMapTagFirstRegistration(KeyFrame *pKF, int tag_id, int left_idx,
                                     int right_idx, tag::MapTagData *pTag);
 
+    // yaml Tag.size / Tag.size_by_id：按 id 查询物理边长（米）
+    double GetConfiguredTagSize(int tag_id) const;
+
     float GetImageScale();
 
 #ifdef REGISTER_LOOP
@@ -167,7 +170,8 @@ public:
 
     cv::Mat mImGray;
 
-    // Tag 可视化开关（见 Tag.save_vis / Tag.show_in_orb_viewer）
+    // Tag 总开关（Tag.enable=0：不检测 / 不建图 / 不优化 / 不因 Tag 插 KF）
+    bool mbTagEnabled = true;
     bool mbTagSaveVis = false;
     std::string mTagSaveVisDir = "tag_vis";
     bool mbTagShowInOrbViewer = false;
@@ -229,16 +233,16 @@ protected:
     // Main tracking function. It is independent of the input sensor.
     void Track();
 
-    // Tag 跟踪入口：IPPE/可视化 + 独立 Tag 状态机（在 ORB Track 之前调用）
+    // Tag 跟踪入口：IPPE / 双目消歧（检测已在 Frame 构造完成；扩图在 LocalMapping）
     void TagTrack();
     void EstimateAndVisualizeTagPoses();
-    void TrackAndExpandTagMap();
 
-    // ORB 已进入 OK 且当前帧位姿可靠后，每帧尝试 Tag 地图初始化（对齐到 ORB 世界系）
-    // 成功则强制创建关键帧并 Commit；返回 true 表示本帧已创建关键帧（勿再走普通 KF）
+    // 双目 Tag 地图唯一入口：ORB TrackLocalMap 成功且 mState==OK 后，
+    // 单帧建图并对齐到当前 ORB Tcw。IMU_STEREO 还须等 VIBA 1 结束（且不在 InitializeIMU 中）。
+    // 成功则强制关键帧；返回 true 表示本帧已建 KF。
     bool TryInitializeTagMapAfterOrbTracking();
 
-    // Tag 地图初始化成功后的导出/日志收尾（Stereo init 与后初始化共用）
+    // Tag 地图初始化成功后的导出/日志收尾
     void OnTagMapInitialized(Map *pMap, KeyFrame *pInitKF);
 
     // 统一 pose-only 入口：useTags 且开关开启时构建 Tag 快照并联合优化（入口内重置优化外点）
@@ -314,7 +318,7 @@ protected:
     // AprilTag detector (owned when HAS_APRILTAG); used when constructing monocular Frames
     ua_tag::AprilTagDetector* mpAprilTagDetector;
 
-    // Tag 模块（StereoInitialization 首次尝试；失败后由 TryInitializeTagMapAfterOrbTracking 重试）
+    // Tag 模块（双目 Tag 地图由 TryInitializeTagMapAfterOrbTracking 在 ORB 跟踪稳定后建立）
     tag::TagInitializer* mpTagInitializer;
     tag::TagTracker* mpTagTracker;
     tag::TagViewer* mpTagViewer;  // 可选；Tag.viewer=1 时创建
@@ -421,7 +425,7 @@ protected:
     bool mbSaveOnlinePose = false;
     std::string mSaveOnlinePoseFile = "OnlineCameraTrajectory.txt";
 
-    // Tag 联合 PoseOptimization（默认关闭；见 Tag.pose_optimization）
+    // Tag 联合 PoseOptimization / PoseInertial*（Tag.pose_optimization 共用开关）
     tag::TagPoseOptParams mTagPoseOptParams;
 
     std::ofstream mOnlinePoseFile;

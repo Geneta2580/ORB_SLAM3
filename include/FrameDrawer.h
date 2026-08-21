@@ -51,6 +51,9 @@ public:
     cv::Mat DrawFrame(float imageScale=1.f);
     cv::Mat DrawRightFrame(float imageScale=1.f);
 
+    // Tag 检测输入图（原图灰度 + 可选 gamma）+ 角点叠加；无图时返回空
+    cv::Mat DrawTagDetectFrame(float imageScale=1.f);
+
     bool both;
 
 protected:
@@ -88,6 +91,7 @@ protected:
     // Tag.detect 叠加到 ORB Current Frame 窗（Tag.show_in_orb_viewer）
     bool mbDrawTags;
     tag::TagFrameData mTagFrameData;
+    cv::Mat mImTagDetect, mImTagDetectRight;
 
     // true: 鱼眼双目（Nleft!=-1，左右特征拼在同一 Frame）；false: PinHole 经典双目
     bool mbFisheyeStereo;

@@ -153,10 +153,15 @@ void LocalMapping::Run()
 
                     if(mbInertial && mpCurrentKeyFrame->GetMap()->isImuInitialized())
                     {
-                        float dist = (mpCurrentKeyFrame->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->GetCameraCenter()).norm() +
-                                (mpCurrentKeyFrame->mPrevKF->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->mPrevKF->GetCameraCenter()).norm();
+                        float dist = 0.f;
+                        if(mpCurrentKeyFrame->mPrevKF)
+                        {
+                            dist = (mpCurrentKeyFrame->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->GetCameraCenter()).norm();
+                            if(mpCurrentKeyFrame->mPrevKF->mPrevKF)
+                                dist += (mpCurrentKeyFrame->mPrevKF->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->mPrevKF->GetCameraCenter()).norm();
+                        }
 
-                        if(dist>0.05)
+                        if(mpCurrentKeyFrame->mPrevKF && dist>0.05)
                             mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
                         if(!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                         {
@@ -171,7 +176,12 @@ void LocalMapping::Run()
                         }
 
                         bool bLarge = ((mpTracker->GetMatchesInliers()>75)&&mbMonocular)||((mpTracker->GetMatchesInliers()>100)&&!mbMonocular);
-                        Optimizer::LocalInertialBA(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA, bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
+                        tag::TagLocalBAStats tagLbaStats;
+                        Optimizer::LocalInertialBA(
+                            mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),
+                            num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA,
+                            bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2(),
+                            mTagLocalBAParams, &tagLbaStats);
                         b_doneLBA = true;
                     }
                     else
@@ -842,20 +852,6 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
     if(pending.empty())
         return;
 
-    // 新建 Tag 时复用地图中已有 Tag 的物理尺寸
-    float tag_size = 0.16f;
-    {
-        const auto existing = pMap->GetAllMapTags();
-        for(const auto &t : existing)
-        {
-            if(t && t->GetTagSize() > 0.0f)
-            {
-                tag_size = t->GetTagSize();
-                break;
-            }
-        }
-    }
-
     bool tag_map_updated = false;
 
     for(const auto &kv : pending)
@@ -870,6 +866,11 @@ void LocalMapping::ProcessTagObservations(KeyFrame *pKF)
 
         if(!pTag)
         {
+            // 按 tag_id 取配置边长；无配置时回退 0.16
+            float tag_size = 0.16f;
+            if(mpTracker)
+                tag_size = static_cast<float>(mpTracker->GetConfiguredTagSize(tag_id));
+
             pTag = std::make_shared<tag::MapTagData>();
             pTag->SetId(tag_id);
             pTag->SetTagSize(tag_size);
@@ -2002,6 +2003,8 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         {
             // Update according to the correction of its reference keyframe
             KeyFrame* pRefKF = pMP->GetReferenceKeyFrame();
+            if(!pRefKF)
+                continue;
 
             if(pRefKF->mnBAGlobalForKF!=GBAid)
                 continue;
@@ -2019,12 +2022,13 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     mnKFs=vpKF.size();
     mIdxInit++;
 
-    for(list<KeyFrame*>::iterator lit = mlNewKeyFrames.begin(), lend=mlNewKeyFrames.end(); lit!=lend; lit++)
+    // 不要 delete 队列里的 KF：Tracking 可能仍把它们当作 mpLastKeyFrame
+    while(CheckNewKeyFrames())
     {
-        (*lit)->SetBadFlag();
-        delete *lit;
+        ProcessNewKeyFrame();
+        vpKF.push_back(mpCurrentKeyFrame);
+        lpKF.push_back(mpCurrentKeyFrame);
     }
-    mlNewKeyFrames.clear();
 
     mpTracker->mState=Tracking::OK;
     bInitializing = false;
@@ -2088,12 +2092,12 @@ void LocalMapping::ScaleRefinement()
     }
     std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
 
-    for(list<KeyFrame*>::iterator lit = mlNewKeyFrames.begin(), lend=mlNewKeyFrames.end(); lit!=lend; lit++)
+    while(CheckNewKeyFrames())
     {
-        (*lit)->SetBadFlag();
-        delete *lit;
+        ProcessNewKeyFrame();
+        vpKF.push_back(mpCurrentKeyFrame);
+        lpKF.push_back(mpCurrentKeyFrame);
     }
-    mlNewKeyFrames.clear();
 
     double t_inertial_only = std::chrono::duration_cast<std::chrono::duration<double> >(t1 - t0).count();
 

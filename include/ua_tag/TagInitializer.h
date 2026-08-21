@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -168,8 +169,11 @@ private:
     bool TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
                                 const CommonTagObsMap &common_obs, Result &result);
 
-    // 从 settings yaml 的 Tag.size 读取（米）
+    // 从 settings yaml 的 Tag.size / Tag.size_by_id 读取（米）
     double mTagSize = 0.16;
+    std::map<int, double> mTagSizeById;
+
+    double GetTagSize(int tag_id) const;
 
     // 从 settings yaml 的 Tag.verbose 读取；为 true 时打印初始化日志
     bool mbVerbose = false;

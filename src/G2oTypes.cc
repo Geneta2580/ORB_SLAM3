@@ -860,4 +860,37 @@ Eigen::Matrix3d Skew(const Eigen::Vector3d &w)
     return W;
 }
 
+void EdgeTagCornerInertial::linearizeOplus()
+{
+    const auto *vTag = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+    const auto *vPose = static_cast<const VertexPose *>(_vertices[1]);
+    const ImuCamPose &imu = vPose->estimate();
+
+    const Eigen::Vector3d Xw = vTag->estimate().map(X_t);
+    const Eigen::Matrix3d &Rcw = imu.Rcw[cam_idx];
+    const Eigen::Vector3d &tcw = imu.tcw[cam_idx];
+    const Eigen::Vector3d Xc = Rcw * Xw + tcw;
+    const Eigen::Vector3d Xb = imu.Rbc[cam_idx] * Xc + imu.tbc[cam_idx];
+    const Eigen::Matrix3d &Rcb = imu.Rcb[cam_idx];
+
+    GeometricCamera *cam = pCamera ? pCamera : imu.pCamera[cam_idx];
+    const Eigen::Matrix<double, 2, 3> proj_jac = cam->projectJac(Xc);
+
+    // MapTag: g2o VertexSE3Expmap 左扰动，e = u - π
+    Eigen::Matrix<double, 3, 6> J_tag;
+    const double xw = Xw(0), yw = Xw(1), zw = Xw(2);
+    J_tag << 0.0, zw, -yw, 1.0, 0.0, 0.0,
+            -zw, 0.0,  xw, 0.0, 1.0, 0.0,
+             yw, -xw, 0.0, 0.0, 0.0, 1.0;
+    _jacobianOplusXi = -proj_jac * Rcw * J_tag;
+
+    // KF: VertexPose 右扰动（与 EdgeMono 相同）
+    Eigen::Matrix<double, 3, 6> SE3deriv;
+    const double x = Xb(0), y = Xb(1), z = Xb(2);
+    SE3deriv << 0.0, z,  -y, 1.0, 0.0, 0.0,
+               -z,  0.0,  x, 0.0, 1.0, 0.0,
+                y, -x,  0.0, 0.0, 0.0, 1.0;
+    _jacobianOplusXj = proj_jac * Rcb * SE3deriv;
+}
+
 }

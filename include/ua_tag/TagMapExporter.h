@@ -74,6 +74,9 @@ public:
     // 关闭轨迹 / 检测 / 首次注册日志文件
     void CloseTrajectory();
 
+    // 地图 Reset 后截断并重开导出文件，避免新旧世界系轨迹拼在同一份文件里
+    void ResetSession();
+
 private:
     bool OpenTrajectoryFile();
     bool OpenDetectionLogFile();

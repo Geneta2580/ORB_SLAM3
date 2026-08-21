@@ -295,6 +295,10 @@ add_executable(stereo_xreal_glass_tag
         Examples/TagFusion/XREAL_Glass/stereo_xreal_glass_tag.cc)
 target_link_libraries(stereo_xreal_glass_tag ${PROJECT_NAME})
 
+add_executable(stereo_inertial_xreal_glass_tag
+        Examples/TagFusion/XREAL_Glass/stereo_inertial_xreal_glass_tag.cc)
+target_link_libraries(stereo_inertial_xreal_glass_tag ${PROJECT_NAME})
+
 # ethz_apriltag2 CLI for Python scripts (same backend as ua_tag::AprilTagDetector)
 if(ORB_SLAM3_WITH_APRILTAG)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/scripts)

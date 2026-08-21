@@ -509,6 +509,28 @@ void Map::ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool b
         pMP->SetWorldPos(s * Ryw * pMP->GetWorldPos() + tyw);
         pMP->UpdateNormalAndDepth();
     }
+    // MapTag 与 KF 相同：先缩放平移，再左乘 Tyw（重力对齐 / IMU 尺度）
+    for(const auto &kv : mMapTags)
+    {
+        const MapTagPtr &pTag = kv.second;
+        if(!pTag)
+            continue;
+        if(pTag->HasPose())
+        {
+            Sophus::SE3f Twt = pTag->GetPose();
+            Twt.translation() *= s;
+            pTag->SetPose(Tyw * Twt);
+        }
+        if(pTag->HasMirrorPose())
+        {
+            Sophus::SE3f TwtMirror = pTag->GetMirrorPose();
+            TwtMirror.translation() *= s;
+            pTag->SetMirrorPose(Tyw * TwtMirror);
+        }
+    }
+    if(!mMapTags.empty())
+        cout << "[TagMap] ApplyScaledRotation tags=" << mMapTags.size()
+             << " scale=" << s << endl;
     mnMapChange++;
 }
 

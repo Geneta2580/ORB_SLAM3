@@ -4,6 +4,8 @@
 #include "ua_tag/TagObservation.h"
 
 #include <opencv2/core/core.hpp>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,13 +55,24 @@ struct AprilTagDetectorConfig
     // ethz_apriltag2 (Thirdparty/apriltag)
     std::string family = "tag36h11";
     int hamming = 2;              // 接受的最大 ethz hammingDistance
-    int black_border = 1;         // ethz TagDetector blackBorder（标准 tag36h11=1）
-    double tag_size = 0.16;       // Tag 边长（米），用于 IPPE_SQUARE
+    // ethz TagDetector blackBorder；可配置多个，DetectCorners 会对每个 border 各扫一遍再按 id 合并
+    // yaml: Tag.black_borders: [1, 2]  或兼容旧项 Tag.black_border: 1
+    std::vector<int> black_borders = {1};
+    double tag_size = 0.16;       // 默认 Tag 边长（米）；未在 size_by_id 中列出的 id 使用此值
+    // 按 tag_id 覆盖边长，例如 yaml:
+    //   Tag.size_by_id: [ {id: 0, size: 0.06}, {id: 10, size: 0.144} ]
+    std::map<int, double> tag_size_by_id;
 
-    // 原图送入 AprilTag 前的可选 CLAHE
-    bool clahe = false;
-    double clahe_clip_limit = 2.0;
-    int clahe_tile_grid = 8;
+    // 屏蔽指定 id：DetectCorners 丢弃这些检测结果
+    // yaml: Tag.ignore_ids: [1, 2, 99]
+    std::set<int> ignore_ids;
+
+    // 送入 AprilTag 前的 gamma：out = 255*(in/255)^gamma；<1 提亮暗部；1=关闭
+    double gamma = 1.0;
+
+    // tag_id 在 tag_size_by_id 中则用覆盖值，否则用 tag_size
+    double GetTagSize(int tag_id) const;
+    bool IsIgnored(int tag_id) const;
 
     // 从 ORB-SLAM3 settings yaml 读取 Tag.*（缺省保留默认值）
     static AprilTagDetectorConfig FromYaml(const std::string &settingsFile);
@@ -109,14 +122,14 @@ public:
     // 注入 ORB GeometricCamera：鱼眼去畸变/重投影误差与 BA 共用 project/unproject
     void SetGeometricCamera(GeometricCamera *camera);
 
-    // 在原图（可选 CLAHE）上检测；填充 corners_raw 与 corners_undistorted（不做 IPPE）
+    // 在原图（可选 gamma）上检测；填充 corners_raw 与 corners_undistorted（不做 IPPE）
     // camera_id：写入观测所属相机；geometric_camera 非空时覆盖默认模型做去畸变（右目用）
     bool DetectCorners(const cv::Mat &image,
                        std::vector<tag::TagObservation> &observations,
                        tag::CameraId camera_id = tag::CameraId::LEFT_OR_MONO,
                        GeometricCamera *geometric_camera = nullptr);
 
-    // 上一帧实际送入检测器的图像（原图灰度 + 可选 CLAHE），供可视化
+    // 上一帧实际送入检测器的图像（原图灰度 + 可选 gamma），供可视化
     const cv::Mat &GetLastPreprocessedImage() const;
 
     // IPPE_SQUARE PnP（在 GeometricCamera 一致的针孔像素上）；prediction 可选
@@ -125,6 +138,9 @@ public:
                       const PosePrediction *prediction = nullptr);
 
     const AprilTagDetectorConfig &GetConfig() const;
+
+    // 按 tag_id 查询物理边长（米）；见 AprilTagDetectorConfig::GetTagSize
+    double GetTagSize(int tag_id) const;
 
 private:
     struct Impl;

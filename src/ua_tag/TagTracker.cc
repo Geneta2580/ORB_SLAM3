@@ -118,6 +118,12 @@ void TagTracker::ClearMotionCache()
     mbHasReferenceKF = false;
 }
 
+void TagTracker::ResetExports()
+{
+    if(mpExporter && mpExporter->IsEnabled())
+        mpExporter->ResetSession();
+}
+
 std::optional<Sophus::SE3f> TagTracker::PredictPoseWithMotionModel() const
 {
     if(!mbHasVelocity || !mbHasLastTcw)

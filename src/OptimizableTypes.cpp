@@ -17,6 +17,7 @@
 */
 
 #include "OptimizableTypes.h"
+#include "G2oTypes.h"
 
 #include "CameraModels/Pinhole.h"
 
@@ -626,6 +627,157 @@ bool CheckBinarySE3Jacobians(EdgeT *edge, double delta, double tol, double *max_
 
         if(max_abs_err)
             *max_abs_err = std::max(err, err_body);
+        return true;
+    }
+
+    bool TestTagCornerInertialEdgeJacobians(double *max_abs_err)
+    {
+        if(max_abs_err)
+            *max_abs_err = 0.0;
+
+        std::vector<float> cam_params = {458.654f, 457.296f, 367.215f, 248.375f};
+        std::unique_ptr<Pinhole> cam0(new Pinhole(cam_params));
+        std::unique_ptr<Pinhole> cam1(new Pinhole(cam_params));
+
+        auto fillImuCam = [&](int n_cams) -> ImuCamPose {
+            ImuCamPose imu;
+            imu.its = 0;
+            Eigen::Quaterniond qwb =
+                Eigen::AngleAxisd(-0.08, Eigen::Vector3d::UnitZ()) *
+                Eigen::AngleAxisd(0.12, Eigen::Vector3d::UnitY());
+            imu.Rwb = qwb.toRotationMatrix();
+            imu.twb = Eigen::Vector3d(0.04, -0.03, 0.02);
+
+            imu.Rcb.resize(n_cams);
+            imu.tcb.resize(n_cams);
+            imu.Rbc.resize(n_cams);
+            imu.tbc.resize(n_cams);
+            imu.Rcw.resize(n_cams);
+            imu.tcw.resize(n_cams);
+            imu.pCamera.resize(n_cams);
+            imu.bf = 0.0;
+
+            imu.Rcb[0] = Eigen::Matrix3d::Identity();
+            imu.tcb[0] = Eigen::Vector3d(0.05, 0.02, 0.01);
+            imu.pCamera[0] = cam0.get();
+            if(n_cams > 1)
+            {
+                imu.Rcb[1] = Eigen::Matrix3d::Identity();
+                imu.tcb[1] = Eigen::Vector3d(0.05 - 0.12, 0.02, 0.01);
+                imu.pCamera[1] = cam1.get();
+            }
+            for(int i = 0; i < n_cams; ++i)
+            {
+                imu.Rbc[i] = imu.Rcb[i].transpose();
+                imu.tbc[i] = -imu.Rbc[i] * imu.tcb[i];
+            }
+            const Eigen::Matrix3d Rbw = imu.Rwb.transpose();
+            const Eigen::Vector3d tbw = -Rbw * imu.twb;
+            for(int i = 0; i < n_cams; ++i)
+            {
+                imu.Rcw[i] = imu.Rcb[i] * Rbw;
+                imu.tcw[i] = imu.Rcb[i] * tbw + imu.tcb[i];
+            }
+            imu.Rwb0 = imu.Rwb;
+            imu.DR.setIdentity();
+            return imu;
+        };
+
+        auto *vTag = new g2o::VertexSE3Expmap();
+        vTag->setId(0);
+        {
+            Eigen::Quaterniond q =
+                Eigen::AngleAxisd(0.2, Eigen::Vector3d::UnitZ()) *
+                Eigen::AngleAxisd(-0.1, Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxisd(0.05, Eigen::Vector3d::UnitX());
+            vTag->setEstimate(g2o::SE3Quat(q, Eigen::Vector3d(0.3, -0.1, 1.5)));
+        }
+
+        const Eigen::Vector3d Xt(-0.08, 0.08, 0.0);
+        const double delta = 1e-8;
+        const double tol = 1e-5;
+
+        auto checkCam = [&](int cam_idx, Pinhole *cam) -> bool {
+            auto *vPose = new VertexPose();
+            vPose->setId(1);
+            vPose->setEstimate(fillImuCam(2));
+
+            const Eigen::Vector3d Xw = vTag->estimate().map(Xt);
+            Eigen::Vector2d z = vPose->estimate().Project(Xw, cam_idx);
+            z += Eigen::Vector2d(0.6, -0.35);
+
+            auto *e = new EdgeTagCornerInertial(cam_idx);
+            e->setVertex(0, vTag);
+            e->setVertex(1, vPose);
+            e->setMeasurement(z);
+            e->setInformation(Eigen::Matrix2d::Identity());
+            e->X_t = Xt;
+            e->pCamera = cam;
+
+            using BinaryBase =
+                g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap, VertexPose>;
+            g2o::JacobianWorkspace jw;
+            jw.updateSize(e);
+            jw.allocate();
+            static_cast<BinaryBase *>(e)->linearizeOplus(jw);
+            const Eigen::Matrix<double, 2, 6> Ja = e->jacobianOplusXi();
+            const Eigen::Matrix<double, 2, 6> Jb = e->jacobianOplusXj();
+
+            const g2o::SE3Quat Ttag = vTag->estimate();
+            const ImuCamPose Tpose = vPose->estimate();
+
+            Eigen::Matrix<double, 2, 6> Ja_num = Eigen::Matrix<double, 2, 6>::Zero();
+            Eigen::Matrix<double, 2, 6> Jb_num = Eigen::Matrix<double, 2, 6>::Zero();
+
+            for(int i = 0; i < 6; ++i)
+            {
+                Eigen::Matrix<double, 6, 1> xi = Eigen::Matrix<double, 6, 1>::Zero();
+                xi(i) = delta;
+                vTag->setEstimate(g2o::SE3Quat::exp(xi) * Ttag);
+                e->computeError();
+                const Eigen::Vector2d e_plus = e->error();
+                xi(i) = -delta;
+                vTag->setEstimate(g2o::SE3Quat::exp(xi) * Ttag);
+                e->computeError();
+                const Eigen::Vector2d e_minus = e->error();
+                Ja_num.col(i) = (e_plus - e_minus) / (2.0 * delta);
+                vTag->setEstimate(Ttag);
+            }
+
+            for(int i = 0; i < 6; ++i)
+            {
+                Eigen::Matrix<double, 6, 1> xi = Eigen::Matrix<double, 6, 1>::Zero();
+                xi(i) = delta;
+                vPose->setEstimate(Tpose);
+                vPose->oplusImpl(xi.data());
+                e->computeError();
+                const Eigen::Vector2d e_plus = e->error();
+                xi(i) = -delta;
+                vPose->setEstimate(Tpose);
+                vPose->oplusImpl(xi.data());
+                e->computeError();
+                const Eigen::Vector2d e_minus = e->error();
+                Jb_num.col(i) = (e_plus - e_minus) / (2.0 * delta);
+                vPose->setEstimate(Tpose);
+            }
+
+            const double err_a = (Ja - Ja_num).cwiseAbs().maxCoeff();
+            const double err_b = (Jb - Jb_num).cwiseAbs().maxCoeff();
+            const double err = std::max(err_a, err_b);
+            if(max_abs_err)
+                *max_abs_err = std::max(*max_abs_err, err);
+            if(err >= tol)
+            {
+                std::cerr << "[TagCornerInertialJac] cam_idx=" << cam_idx
+                          << " failed, tag_err=" << err_a
+                          << " pose_err=" << err_b << std::endl;
+                return false;
+            }
+            return true;
+        };
+
+        if(!checkCam(0, cam0.get()) || !checkCam(1, cam1.get()))
+            return false;
         return true;
     }
 

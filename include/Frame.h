@@ -315,7 +315,7 @@ public:
     // AprilTag observations for this frame (corners only after DetectCorners; pose optional).
     tag::TagFrameData mTagFrameData;
 
-    // Tag 检测用图副本（原图灰度 + 可选 CLAHE；与 corners_raw 同域；Detector 共享缓冲需 clone）。
+    // Tag 检测用图副本（原图灰度 + 可选 gamma；与 corners_raw 同域；Detector 共享缓冲需 clone）。
     cv::Mat mImTagDetect;       // 左目/单目
     cv::Mat mImTagDetectRight;  // 右目（双目）
 

@@ -221,6 +221,7 @@ void Viewer::Run()
     pangolin::OpenGlMatrix Ow; // Oriented with g in the z axis
     Ow.SetIdentity();
     cv::namedWindow("ORB-SLAM3: Current Frame");
+    cv::namedWindow("TagFusion: Tag Detect");
 
     bool bFollow = true;
     bool bLocalizationMode = false;
@@ -371,6 +372,19 @@ void Viewer::Run()
         }
 
         cv::imshow("ORB-SLAM3: Current Frame",toShow);
+
+        cv::Mat tagShow = mpFrameDrawer->DrawTagDetectFrame(trackedImageScale);
+        if(!tagShow.empty())
+        {
+            if(mImageViewerScale != 1.f)
+            {
+                int width = tagShow.cols * mImageViewerScale;
+                int height = tagShow.rows * mImageViewerScale;
+                cv::resize(tagShow, tagShow, cv::Size(width, height));
+            }
+            cv::imshow("TagFusion: Tag Detect", tagShow);
+        }
+
         cv::waitKey(mT);
 
         if(menuReset)

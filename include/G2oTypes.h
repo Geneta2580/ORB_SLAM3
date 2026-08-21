@@ -22,6 +22,7 @@
 #include "Thirdparty/g2o/g2o/core/base_vertex.h"
 #include "Thirdparty/g2o/g2o/core/base_binary_edge.h"
 #include "Thirdparty/g2o/g2o/types/types_sba.h"
+#include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
 #include "Thirdparty/g2o/g2o/core/base_multi_edge.h"
 #include "Thirdparty/g2o/g2o/core/base_unary_edge.h"
 
@@ -841,6 +842,44 @@ public:
     Eigen::Matrix3d dRij;
     Eigen::Vector3d dtij;
 };
+
+// MapTag T_wt (VertexSE3Expmap) + KF IMU pose (VertexPose)
+// e = u - π_cam(Rcw[cam_idx] * T_wt * X_t + tcw[cam_idx])
+class EdgeTagCornerInertial : public g2o::BaseBinaryEdge<2, Eigen::Vector2d,
+                                                         g2o::VertexSE3Expmap, VertexPose>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    explicit EdgeTagCornerInertial(int cam_idx_ = 0) : cam_idx(cam_idx_) {}
+
+    virtual bool read(std::istream &is) { return false; }
+    virtual bool write(std::ostream &os) const { return false; }
+
+    void computeError()
+    {
+        const auto *vTag = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const auto *vPose = static_cast<const VertexPose *>(_vertices[1]);
+        const Eigen::Vector3d Xw = vTag->estimate().map(X_t);
+        _error = _measurement - vPose->estimate().Project(Xw, cam_idx);
+    }
+
+    bool isDepthPositive() const
+    {
+        const auto *vTag = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        const auto *vPose = static_cast<const VertexPose *>(_vertices[1]);
+        const Eigen::Vector3d Xw = vTag->estimate().map(X_t);
+        return vPose->estimate().isDepthPositive(Xw, cam_idx);
+    }
+
+    virtual void linearizeOplus();
+
+    Eigen::Vector3d X_t = Eigen::Vector3d::Zero();
+    GeometricCamera *pCamera = nullptr;
+    int cam_idx = 0;
+};
+
+bool TestTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
 
 } //namespace ORB_SLAM2
 

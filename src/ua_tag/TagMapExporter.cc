@@ -515,5 +515,14 @@ void TagMapExporter::CloseTrajectory()
     }
 }
 
+void TagMapExporter::ResetSession()
+{
+    CloseTrajectory();
+    const bool traj_ok = OpenTrajectoryFile();
+    const bool det_ok = OpenDetectionLogFile();
+    const bool first_ok = OpenFirstRegistrationLogFile();
+    mbEnabled = traj_ok || det_ok || first_ok;
+}
+
 }  // namespace tag
 }  // namespace ORB_SLAM3

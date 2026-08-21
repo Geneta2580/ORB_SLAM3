@@ -169,7 +169,7 @@ bool SaveTagsVis(const cv::Mat &image,
                  const tag::TagFrameData &frame_data,
                  const std::string &savePath)
 {
-    if(savePath.empty() || frame_data.Empty())
+    if(savePath.empty() || image.empty())
         return false;
 
     cv::Mat vis = DrawTags(image, frame_data, tag::CameraId::LEFT_OR_MONO);
@@ -183,9 +183,7 @@ bool SaveTagsVis(const cv::Mat &imLeft, const cv::Mat &imRight,
                  const tag::TagFrameData &frame_data,
                  const std::string &savePath)
 {
-    if(savePath.empty() || frame_data.Empty())
-        return false;
-    if(imLeft.empty() || imRight.empty())
+    if(savePath.empty() || imLeft.empty() || imRight.empty())
         return false;
 
     cv::Mat vis = DrawTagsStereo(imLeft, imRight, frame_data);

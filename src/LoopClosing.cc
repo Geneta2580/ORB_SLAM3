@@ -119,6 +119,7 @@ void LoopClosing::Run()
 #endif
             if(bFindedRegion)
             {
+                // 不同地图的融合（多个Map，前端丢失连续track）
                 if(mbMergeDetected)
                 {
                     if ((mpTracker->mSensor==System::IMU_MONOCULAR || mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
@@ -219,6 +220,7 @@ void LoopClosing::Run()
 
                 }
 
+                // 同一地图的闭环检测（单个Map）
                 if(mbLoopDetected)
                 {
                     bool bGoodLoop = true;

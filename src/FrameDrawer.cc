@@ -25,8 +25,11 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
-#include<mutex>
+#include <algorithm>
+#include <mutex>
+#include <sstream>
 
 namespace ORB_SLAM3
 {
@@ -406,7 +409,90 @@ cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     return imWithInfo;
 }
 
+cv::Mat FrameDrawer::DrawTagDetectFrame(float imageScale)
+{
+    cv::Mat imLeft, imRight;
+    tag::TagFrameData tagFrameData;
+    bool bDrawTags = false;
+    int state = Tracking::NO_IMAGES_YET;
 
+    {
+        unique_lock<mutex> lock(mMutex);
+        state = mState;
+        bDrawTags = mbDrawTags;
+        mImTagDetect.copyTo(imLeft);
+        mImTagDetectRight.copyTo(imRight);
+        if(bDrawTags)
+            tagFrameData = mTagFrameData;
+    }
+
+    if(imLeft.empty() && imRight.empty())
+        return cv::Mat();
+
+    auto preparePanel = [&](cv::Mat &im, tag::CameraId cam, const char *label)
+    {
+        if(im.empty())
+            return;
+        if(imageScale != 1.f && imageScale > 0.f)
+        {
+            const int w = std::max(1, static_cast<int>(im.cols / imageScale));
+            const int h = std::max(1, static_cast<int>(im.rows / imageScale));
+            cv::resize(im, im, cv::Size(w, h));
+        }
+        if(im.channels() < 3)
+            cv::cvtColor(im, im, cv::COLOR_GRAY2BGR);
+#ifdef HAS_APRILTAG
+        if(bDrawTags)
+            ua_tag::OverlayTags(im, tagFrameData, cam, imageScale);
+#else
+        (void)cam;
+        (void)bDrawTags;
+#endif
+        cv::putText(im, label, cv::Point(12, 28), cv::FONT_HERSHEY_SIMPLEX, 0.9,
+                    cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
+    };
+
+    preparePanel(imLeft, tag::CameraId::LEFT_OR_MONO, "Tag L");
+    preparePanel(imRight, tag::CameraId::RIGHT, "Tag R");
+
+    cv::Mat vis;
+    if(!imLeft.empty() && !imRight.empty())
+    {
+        if(imLeft.rows != imRight.rows)
+        {
+            const int h = std::max(imLeft.rows, imRight.rows);
+            if(imLeft.rows != h)
+                cv::copyMakeBorder(imLeft, imLeft, 0, h - imLeft.rows, 0, 0,
+                                   cv::BORDER_CONSTANT);
+            if(imRight.rows != h)
+                cv::copyMakeBorder(imRight, imRight, 0, h - imRight.rows, 0, 0,
+                                   cv::BORDER_CONSTANT);
+        }
+        cv::hconcat(imLeft, imRight, vis);
+    }
+    else
+        vis = imLeft.empty() ? imRight : imLeft;
+
+    std::stringstream s;
+    s << " TAG DETECT (detector input";
+    s << ", gamma if enabled) | L=" << tagFrameData.left.size()
+      << " R=" << tagFrameData.right.size();
+    if(state==Tracking::NOT_INITIALIZED)
+        s << " | TRYING TO INITIALIZE";
+    else if(state==Tracking::OK)
+        s << " | SLAM";
+    else if(state==Tracking::LOST)
+        s << " | LOST";
+
+    int baseline=0;
+    cv::Size textSize = cv::getTextSize(s.str(),cv::FONT_HERSHEY_PLAIN,1,1,&baseline);
+    cv::Mat imText(vis.rows+textSize.height+10, vis.cols, vis.type());
+    vis.copyTo(imText.rowRange(0,vis.rows).colRange(0,vis.cols));
+    imText.rowRange(vis.rows,imText.rows) = cv::Mat::zeros(textSize.height+10, vis.cols, vis.type());
+    cv::putText(imText,s.str(),cv::Point(5,imText.rows-5),cv::FONT_HERSHEY_PLAIN,1,
+                cv::Scalar(255,255,255),1,8);
+    return imText;
+}
 
 void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {
@@ -456,8 +542,14 @@ void FrameDrawer::Update(Tracking *pTracker)
     mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
 
     mbDrawTags = pTracker->mbTagShowInOrbViewer;
+    mImTagDetect.release();
+    mImTagDetectRight.release();
     if(mbDrawTags)
+    {
         mTagFrameData = pTracker->mCurrentFrame.mTagFrameData;
+        pTracker->mCurrentFrame.mImTagDetect.copyTo(mImTagDetect);
+        pTracker->mCurrentFrame.mImTagDetectRight.copyTo(mImTagDetectRight);
+    }
     else
         mTagFrameData.Clear();
 

@@ -69,7 +69,17 @@ public:
                                 const std::vector<tag::TagPoseConstraint> &tagConstraints,
                                 const tag::TagPoseOptParams &tagParams);
     int static PoseInertialOptimizationLastKeyFrame(Frame* pFrame, bool bRecInit = false);
+    int static PoseInertialOptimizationLastKeyFrame(
+        Frame* pFrame,
+        const std::vector<tag::TagPoseConstraint> &tagConstraints,
+        const tag::TagPoseOptParams &tagParams,
+        bool bRecInit = false);
     int static PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit = false);
+    int static PoseInertialOptimizationLastFrame(
+        Frame *pFrame,
+        const std::vector<tag::TagPoseConstraint> &tagConstraints,
+        const tag::TagPoseOptParams &tagParams,
+        bool bRecInit = false);
 
     // if bFixScale is true, 6DoF optimization (stereo,rgbd), 7DoF otherwise (mono)
     void static OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* pCurKF,
@@ -94,7 +104,9 @@ public:
 
     // For inertial systems
 
-    void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge = false, bool bRecInit = false);
+    void static LocalInertialBA(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges, bool bLarge = false, bool bRecInit = false,
+                               const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
+                               tag::TagLocalBAStats *tagStats = nullptr);
     void static MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbStopFlag, Map *pMap, LoopClosing::KeyFrameAndPose &corrPoses);
 
     // Local BA in welding area when two maps are merged

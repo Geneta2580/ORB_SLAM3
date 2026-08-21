@@ -13,16 +13,38 @@
 namespace ORB_SLAM3 {
 namespace tag {
 
+bool ModuleEnabledFromSettings(const std::string &settings_path)
+{
+    cv::FileStorage fs(settings_path, cv::FileStorage::READ);
+    if(!fs.isOpened())
+        return true;
+    const cv::FileNode node = fs["Tag.enable"];
+    if(node.empty())
+        return true;
+    return static_cast<int>(node) != 0;
+}
+
 TagPoseOptParams TagPoseOptParams::FromSettings(const std::string &settings_path)
 {
     TagPoseOptParams params;
+    if(!ModuleEnabledFromSettings(settings_path))
+        return params;
+
     cv::FileStorage fs(settings_path, cv::FileStorage::READ);
     if(!fs.isOpened())
         return params;
 
     cv::FileNode node = fs["Tag.pose_optimization"];
     if(!node.empty())
+    {
         params.enable = static_cast<int>(node) != 0;
+        params.inertial_enable = params.enable;
+    }
+
+    // 兼容旧 yaml：仅写了 inertial 键时仍生效；与 pose_optimization 同时存在则以 pose_optimization 为准
+    node = fs["Tag.inertial_pose_optimization"];
+    if(!node.empty() && fs["Tag.pose_optimization"].empty())
+        params.inertial_enable = static_cast<int>(node) != 0;
 
     node = fs["Tag.corner_sigma"];
     if(!node.empty())
@@ -53,6 +75,9 @@ TagPoseOptParams TagPoseOptParams::FromSettings(const std::string &settings_path
 TagLocalBAParams TagLocalBAParams::FromSettings(const std::string &settings_path)
 {
     TagLocalBAParams params;
+    if(!ModuleEnabledFromSettings(settings_path))
+        return params;
+
     cv::FileStorage fs(settings_path, cv::FileStorage::READ);
     if(!fs.isOpened())
         return params;
@@ -114,10 +139,13 @@ bool CollectNeededTagIds(const Frame *pFrame, std::unordered_set<int> &ids)
     return !ids.empty();
 }
 
-bool MapTagEligible(const MapTagData *pTag, const TagPoseOptParams &params)
+bool MapTagEligible(const MapTagData *pTag, const TagPoseOptParams &params,
+                    bool inertial)
 {
     if(!pTag || pTag->IsBad() || !pTag->HasWorldCorners())
         return false;
+    if(inertial)
+        return pTag->GetState() == MapTagState::ACTIVE;
     if(params.fixed_only)
         return pTag->GetState() == MapTagState::FIXED_ANCHOR;
     return pTag->GetState() == MapTagState::FIXED_ANCHOR ||
@@ -127,10 +155,11 @@ bool MapTagEligible(const MapTagData *pTag, const TagPoseOptParams &params)
 }  // namespace
 
 std::vector<TagPoseConstraint> BuildTagMapSnapshot(
-    Map *pMap, Frame *pFrame, const TagPoseOptParams &params)
+    Map *pMap, Frame *pFrame, const TagPoseOptParams &params, bool inertial)
 {
     std::vector<TagPoseConstraint> out;
-    if(!params.enable || !pMap || !pFrame || !pMap->IsTagInitialized())
+    const bool enabled = inertial ? params.inertial_enable : params.enable;
+    if(!enabled || !pMap || !pFrame || !pMap->IsTagInitialized())
         return out;
 
     std::unordered_set<int> needed;
@@ -141,7 +170,7 @@ std::vector<TagPoseConstraint> BuildTagMapSnapshot(
     for(int tag_id : needed)
     {
         const Map::MapTagPtr pTag = pMap->GetMapTag(tag_id);
-        if(!MapTagEligible(pTag.get(), params))
+        if(!MapTagEligible(pTag.get(), params, inertial))
             continue;
 
         const auto corners_f = pTag->GetWorldCorners();
@@ -154,7 +183,8 @@ std::vector<TagPoseConstraint> BuildTagMapSnapshot(
 
     if(params.verbose)
     {
-        std::cout << "[TagPoseOpt] snapshot tags=" << out.size()
+        std::cout << (inertial ? "[TagInertialPoseOpt]" : "[TagPoseOpt]")
+                  << " snapshot tags=" << out.size()
                   << " needed=" << needed.size()
                   << " frame_id=" << pFrame->mnId << std::endl;
     }

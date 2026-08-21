@@ -43,6 +43,9 @@ public:
     // 清空位姿/速度/参考关键帧临时缓存（跟踪失败或重置时调用）
     void ClearMotionCache();
 
+    // 地图 Reset 后截断 Tag 导出文件（轨迹/检测/首次注册）
+    void ResetExports();
+
     // 若开启导出：记录当前帧相机 Pose 轨迹
     void LogCameraPose(const Frame &frame);
 

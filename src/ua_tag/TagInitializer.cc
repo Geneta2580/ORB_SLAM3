@@ -64,9 +64,35 @@ TagInitializer::TagInitializer(const std::string &settingsFile)
     if(!node.empty())
         mTagSize = static_cast<double>(node);
 
+    node = fs["Tag.size_by_id"];
+    if(!node.empty() && node.isSeq())
+    {
+        for(cv::FileNodeIterator it = node.begin(); it != node.end(); ++it)
+        {
+            const cv::FileNode item = *it;
+            const cv::FileNode id_node = item["id"];
+            const cv::FileNode size_node = item["size"];
+            if(id_node.empty() || size_node.empty())
+                continue;
+            const int id = static_cast<int>(id_node);
+            const double sz = static_cast<double>(size_node);
+            if(id < 0 || sz <= 0.0)
+                continue;
+            mTagSizeById[id] = sz;
+        }
+    }
+
     node = fs["Tag.verbose"];
     if(!node.empty())
         mbVerbose = static_cast<int>(node) != 0;
+}
+
+double TagInitializer::GetTagSize(int tag_id) const
+{
+    const auto it = mTagSizeById.find(tag_id);
+    if(it != mTagSizeById.end() && it->second > 0.0)
+        return it->second;
+    return mTagSize;
 }
 
 bool TagInitializer::HasTwoValidIppeCandidates(const TagObservation &obs) noexcept
@@ -233,10 +259,7 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
     if(!pCamera || mTagSize <= 0.0 || common_obs.empty())
         return false;
 
-    std::vector<cv::Point3f> object_pts;
-    ua_tag::BuildSquareObjectPoints(mTagSize, object_pts);
-
-    // 固定 T_21 下，一对 (i_ref, i_cur) 的正向/反向重投影误差平均
+    // 固定 T_21 下，一对 (i_ref, i_cur) 的正向/反向重投影误差平均（按 tag_id 取边长）
     auto ComputePairReprojError =
         [&](const Sophus::SE3f &T_21, const Sophus::SE3f &T_12,
             const TagObservation &obs_ref, const TagObservation &obs_cur,
@@ -245,6 +268,9 @@ bool TagInitializer::ResolveTwoViewIppeAmbiguity(const CommonTagObsMap &common_o
         const TagPoseEstimate &est_cur = *obs_cur.pose_estimate;
         if(!est_ref.candidates[i_ref].valid || !est_cur.candidates[i_cur].valid)
             return std::numeric_limits<float>::infinity();
+
+        std::vector<cv::Point3f> object_pts;
+        ua_tag::BuildSquareObjectPoints(GetTagSize(obs_ref.tag_id), object_pts);
 
         // 观测用 corners_raw，与 GeometricCamera::project（原图像素 / KB）同域
         const Sophus::SE3f T_c2t_pred = T_21 * est_ref.candidates[i_ref].T_ct;
@@ -462,7 +488,7 @@ bool TagInitializer::TryInitializeSingleFrame(Frame &frame, Result &result)
 
         MapTagPtr map_tag = std::make_shared<MapTagData>();
         map_tag->SetId(tag_id);
-        map_tag->SetTagSize(static_cast<float>(mTagSize));
+        map_tag->SetTagSize(static_cast<float>(GetTagSize(tag_id)));
         map_tag->SetPose(T_wt);
         if(const TagPoseCandidate *mir = obs.pose_estimate->Unselected())
         {
@@ -504,7 +530,7 @@ bool TagInitializer::CompleteSingleFrameInitWithSecondFrame(Frame &first_frame,
     for(auto &kv : result.tags)
     {
         if(kv.second && kv.second->GetTagSize() <= 0.0f)
-            kv.second->SetTagSize(static_cast<float>(mTagSize));
+            kv.second->SetTagSize(static_cast<float>(GetTagSize(kv.first)));
     }
 
     Sophus::SE3f Tcw_second;
@@ -631,7 +657,7 @@ bool TagInitializer::TryInitializeTwoFrames(Frame &frame, Frame &ref_frame,
 
         MapTagPtr map_tag = std::make_shared<MapTagData>();
         map_tag->SetId(tag_id);
-        map_tag->SetTagSize(static_cast<float>(mTagSize));
+        map_tag->SetTagSize(static_cast<float>(GetTagSize(tag_id)));
         map_tag->SetPose(T_wt);
         if(obs_ref_ptr->pose_estimate.has_value())
         {

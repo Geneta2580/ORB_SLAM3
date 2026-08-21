@@ -23,6 +23,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace ORB_SLAM3
 {
@@ -357,15 +358,22 @@ int ResolvePoseAmbiguity(const std::array<tag::TagPoseCandidate, 2> &candidates,
 
 namespace {
 
-cv::Mat ApplyClahe(const cv::Mat &im, const AprilTagDetectorConfig &cfg)
+cv::Mat BuildGammaLut(double gamma)
 {
-    if(im.empty() || !cfg.clahe)
-        return im;
+    cv::Mat lut(1, 256, CV_8U);
+    uchar *p = lut.ptr<uchar>(0);
+    const double inv = 1.0 / 255.0;
+    for(int i = 0; i < 256; ++i)
+        p[i] = cv::saturate_cast<uchar>(std::pow(static_cast<double>(i) * inv, gamma) * 255.0);
+    return lut;
+}
 
-    const int tile = std::max(1, cfg.clahe_tile_grid);
-    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(cfg.clahe_clip_limit, cv::Size(tile, tile));
+cv::Mat ApplyGamma(const cv::Mat &im, const cv::Mat &lut)
+{
+    if(im.empty() || lut.empty())
+        return im;
     cv::Mat out;
-    clahe->apply(im, out);
+    cv::LUT(im, lut, out);
     return out;
 }
 
@@ -373,8 +381,8 @@ cv::Mat ApplyClahe(const cv::Mat &im, const AprilTagDetectorConfig &cfg)
 
 struct AprilTagDetector::Impl
 {
-    // ethz_apriltag2 (Thirdparty/apriltag)
-    std::unique_ptr<AprilTags::TagDetector> detector;
+    // ethz_apriltag2：每个 black_border 一个检测器，DetectCorners 合并结果
+    std::vector<std::unique_ptr<AprilTags::TagDetector>> detectors;
     std::string family_name;
     double tag_size;
     AprilTagDetectorConfig config;
@@ -385,8 +393,9 @@ struct AprilTagDetector::Impl
     // 与 ORB Tracking/BA 共用；鱼眼路径优先用其 project/unproject
     GeometricCamera *geometric_camera = nullptr;
 
-    // 最近一次送入检测器的图像（原图灰度 + 可选 CLAHE）
+    // 最近一次送入检测器的图像（原图灰度 + 可选 gamma）
     cv::Mat last_preprocessed;
+    cv::Mat gamma_lut;
 
     Impl(const AprilTagDetectorConfig &cfg)
         : family_name(cfg.family), tag_size(cfg.tag_size), config(cfg)
@@ -395,8 +404,28 @@ struct AprilTagDetector::Impl
         if(codes == nullptr)
             throw std::invalid_argument("AprilTagDetector: unsupported tag family: " + cfg.family);
 
-        const size_t black_border = static_cast<size_t>(std::max(1, cfg.black_border));
-        detector.reset(new AprilTags::TagDetector(*codes, black_border));
+        std::vector<int> borders = cfg.black_borders;
+        if(borders.empty())
+            borders.push_back(1);
+
+        // 去重、保证 >=1，保持配置顺序
+        std::vector<int> unique_borders;
+        unique_borders.reserve(borders.size());
+        for(int b : borders)
+        {
+            const int bb = std::max(1, b);
+            if(std::find(unique_borders.begin(), unique_borders.end(), bb) == unique_borders.end())
+                unique_borders.push_back(bb);
+        }
+        config.black_borders = unique_borders;
+
+        detectors.reserve(unique_borders.size());
+        // 每个 black_border 一个检测器，DetectCorners 合并结果
+        for(int bb : unique_borders)
+            detectors.emplace_back(new AprilTags::TagDetector(*codes, static_cast<size_t>(bb)));
+
+        if(cfg.gamma > 0.0 && std::abs(cfg.gamma - 1.0) > 1e-6)
+            gamma_lut = BuildGammaLut(cfg.gamma);
     }
 
     ~Impl() = default;
@@ -452,32 +481,90 @@ AprilTagDetectorConfig AprilTagDetectorConfig::FromYaml(const std::string &setti
     if(!node.empty())
         config.hamming = static_cast<int>(node);
 
-    node = fs["Tag.black_border"];
-    if(!node.empty())
-        config.black_border = static_cast<int>(node);
+    // 优先 Tag.black_borders: [1, 2]；否则兼容 Tag.black_border: 1
+    node = fs["Tag.black_borders"];
+    if(!node.empty() && node.isSeq())
+    {
+        config.black_borders.clear();
+        for(cv::FileNodeIterator it = node.begin(); it != node.end(); ++it)
+        {
+            const int b = static_cast<int>(*it);
+            if(b >= 1)
+                config.black_borders.push_back(b);
+        }
+        if(config.black_borders.empty())
+            config.black_borders.push_back(1);
+    }
+    else
+    {
+        node = fs["Tag.black_border"];
+        if(!node.empty())
+            config.black_borders = {std::max(1, static_cast<int>(node))};
+    }
 
     node = fs["Tag.size"];
     if(!node.empty())
         config.tag_size = static_cast<double>(node);
 
-    node = fs["Tag.clahe"];
-    if(!node.empty())
-        config.clahe = static_cast<int>(node) != 0;
+    // 按 id 覆盖边长：Tag.size_by_id: [ {id: 0, size: 0.06}, {id: 10, size: 0.144} ]
+    node = fs["Tag.size_by_id"];
+    if(!node.empty() && node.isSeq())
+    {
+        for(cv::FileNodeIterator it = node.begin(); it != node.end(); ++it)
+        {
+            const cv::FileNode item = *it;
+            const cv::FileNode id_node = item["id"];
+            const cv::FileNode size_node = item["size"];
+            if(id_node.empty() || size_node.empty())
+                continue;
+            const int id = static_cast<int>(id_node);
+            const double sz = static_cast<double>(size_node);
+            if(id < 0 || sz <= 0.0)
+                continue;
+            config.tag_size_by_id[id] = sz;
+        }
+    }
 
-    node = fs["Tag.clahe_clip_limit"];
-    if(!node.empty())
-        config.clahe_clip_limit = static_cast<double>(node);
+    // 屏蔽指定 id：Tag.ignore_ids: [1, 2, 99]
+    node = fs["Tag.ignore_ids"];
+    if(!node.empty() && node.isSeq())
+    {
+        for(cv::FileNodeIterator it = node.begin(); it != node.end(); ++it)
+        {
+            const int id = static_cast<int>(*it);
+            if(id >= 0)
+                config.ignore_ids.insert(id);
+        }
+    }
 
-    node = fs["Tag.clahe_tile_grid"];
+    node = fs["Tag.gamma"];
     if(!node.empty())
-        config.clahe_tile_grid = static_cast<int>(node);
+        config.gamma = static_cast<double>(node);
 
     return config;
+}
+
+double AprilTagDetectorConfig::GetTagSize(int tag_id) const
+{
+    const auto it = tag_size_by_id.find(tag_id);
+    if(it != tag_size_by_id.end() && it->second > 0.0)
+        return it->second;
+    return tag_size;
+}
+
+bool AprilTagDetectorConfig::IsIgnored(int tag_id) const
+{
+    return ignore_ids.find(tag_id) != ignore_ids.end();
 }
 
 const AprilTagDetectorConfig &AprilTagDetector::GetConfig() const
 {
     return mpImpl->config;
+}
+
+double AprilTagDetector::GetTagSize(int tag_id) const
+{
+    return mpImpl->config.GetTagSize(tag_id);
 }
 
 void AprilTagDetector::SetCameraModel(const CameraModel &camera)
@@ -515,8 +602,8 @@ AprilTagDetector::~AprilTagDetector()
     delete mpImpl;
 }
 
-// 检测 AprilTags 角点：原图（可选 CLAHE）上检测，再对角点做去畸变
-// 后端：Thirdparty/apriltag ethz_apriltag2 (AprilTags::TagDetector)
+// 检测 AprilTags 角点：原图（可选 gamma）上检测，再对角点做去畸变
+// 后端：Thirdparty/apriltag ethz_apriltag2；对每个 black_border 各扫一遍，按 id 合并
 bool AprilTagDetector::DetectCorners(const cv::Mat &image,
                                      std::vector<tag::TagObservation> &observations,
                                      tag::CameraId camera_id,
@@ -526,13 +613,13 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
     mpImpl->last_preprocessed.release();
 
     cv::Mat gray = ToGray(image);
-    cv::Mat processed = ApplyClahe(gray, mpImpl->config);
+    cv::Mat processed = ApplyGamma(gray, mpImpl->gamma_lut);
     if(!processed.isContinuous())
         processed = processed.clone();
 
     mpImpl->last_preprocessed = processed;
 
-    if(!mpImpl->detector)
+    if(mpImpl->detectors.empty())
         return false;
 
     // 右目必须显式传入相机模型，禁止回退默认/左目
@@ -549,37 +636,59 @@ bool AprilTagDetector::DetectCorners(const cv::Mat &image,
         geom = mpImpl->geometric_camera;
     }
 
-    std::vector<AprilTags::TagDetection> dets = mpImpl->detector->extractTags(processed);
-    observations.reserve(dets.size());
+    // tag_id -> 最优观测（更低 hamming，其次更大 observed_perimeter）
+    std::unordered_map<int, tag::TagObservation> best_by_id;
 
-    for(const AprilTags::TagDetection &det : dets)
+    for(const auto &det_ptr : mpImpl->detectors)
     {
-        if(!det.good)
-            continue;
-        // Map yaml Tag.hamming to max accepted ethz hammingDistance
-        if(det.hammingDistance > mpImpl->config.hamming)
+        if(!det_ptr)
             continue;
 
-        tag::TagObservation obs;
-        obs.tag_id = det.id;
-        obs.camera_id = camera_id;
-        obs.hamming = det.hammingDistance;
-        obs.observed_perimeter = det.observedPerimeter;
-        // ethz has no decision_margin; use perimeter as a rough quality proxy
-        obs.decision_margin = obs.observed_perimeter;
-        for(int k = 0; k < 4; ++k)
-            obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
-        obs.observed_area = tag::TagObservation::ComputeQuadArea(obs.corners_raw);
+        const std::vector<AprilTags::TagDetection> dets = det_ptr->extractTags(processed);
+        for(const AprilTags::TagDetection &det : dets)
+        {
+            if(!det.good)
+                continue;
+            if(det.hammingDistance > mpImpl->config.hamming)
+                continue;
+            if(mpImpl->config.IsIgnored(det.id))
+                continue;
 
-        // 写入与 GeometricCamera 一致的理想针孔角点（供 IPPE）；无模型时等于 raw
-        if(mpImpl->has_camera_model || geom)
-            UndistortCorners(obs, mpImpl->camera_model, geom, obs.corners_undistorted);
-        else
-            obs.corners_undistorted = obs.corners_raw;
+            tag::TagObservation obs;
+            obs.tag_id = det.id;
+            obs.camera_id = camera_id;
+            obs.hamming = det.hammingDistance;
+            obs.observed_perimeter = det.observedPerimeter;
+            obs.decision_margin = obs.observed_perimeter;
+            for(int k = 0; k < 4; ++k)
+                obs.corners_raw[k] = cv::Point2f(det.p[k].first, det.p[k].second);
+            obs.observed_area = tag::TagObservation::ComputeQuadArea(obs.corners_raw);
 
-        // pose_estimate 保持 nullopt：DetectCorners 只负责角点
-        observations.push_back(obs);
+            if(mpImpl->has_camera_model || geom)
+                UndistortCorners(obs, mpImpl->camera_model, geom, obs.corners_undistorted);
+            else
+                obs.corners_undistorted = obs.corners_raw;
+
+            auto it = best_by_id.find(obs.tag_id);
+            if(it == best_by_id.end())
+            {
+                best_by_id.emplace(obs.tag_id, std::move(obs));
+                continue;
+            }
+
+            const tag::TagObservation &prev = it->second;
+            const bool better =
+                (obs.hamming < prev.hamming) ||
+                (obs.hamming == prev.hamming &&
+                 obs.observed_perimeter > prev.observed_perimeter);
+            if(better)
+                it->second = std::move(obs);
+        }
     }
+
+    observations.reserve(best_by_id.size());
+    for(auto &kv : best_by_id)
+        observations.push_back(std::move(kv.second));
 
     return true;
 }
@@ -591,12 +700,13 @@ bool AprilTagDetector::EstimatePose(tag::TagObservation &observation,
 {
     observation.pose_estimate = std::nullopt;
 
-    if(mpImpl->tag_size <= 0.0 || camera.fx <= 0.0 || camera.fy <= 0.0)
+    const double tag_size = mpImpl->config.GetTagSize(observation.tag_id);
+    if(tag_size <= 0.0 || camera.fx <= 0.0 || camera.fy <= 0.0)
         return false;
 
     // 构建AprilTag的物体点，Tag自身坐标系下的4个角点3D坐标
     std::vector<cv::Point3f> object_pts;
-    BuildSquareObjectPoints(mpImpl->tag_size, object_pts);
+    BuildSquareObjectPoints(tag_size, object_pts);
 
     // IPPE 初值：GeometricCamera 一致的针孔像素 + 零畸变 K
     // 候选误差：优先用 GeometricCamera::project vs corners_raw（与 ORB BA 同域）
