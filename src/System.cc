@@ -20,8 +20,9 @@
 
 #include "System.h"
 #include "Converter.h"
+#include "Frame.h"
 #include "ua_tag/TagPoseConstraints.h"
-#include <thread>
+#include <cassert>
 #include <pangolin/pangolin.h>
 #include <iomanip>
 #include <openssl/md5.h>
@@ -195,7 +196,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
                                      mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD, strSequence);
     mpLocalMapper->SetTagLocalBAParams(tag::TagLocalBAParams::FromSettings(strSettingsFile));
-    mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run,mpLocalMapper);
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
         mpLocalMapper->mThFarPoints = settings_->thFarPoints();
@@ -211,10 +211,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     //Initialize the Loop Closing thread and launch
     // mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
-    mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC); // mSensor!=MONOCULAR);
-    mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
+    mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC);
+    mpLoopCloser->SetTagLoopParams(tag::TagLoopParams::FromSettings(strSettingsFile));
+    mpLoopCloser->SetTagLocalBAParams(tag::TagLocalBAParams::FromSettings(strSettingsFile));
 
-    //Set pointers between threads
+    //Set pointers between modules
     mpTracker->SetLocalMapper(mpLocalMapper);
     mpTracker->SetLoopClosing(mpLoopCloser);
 
@@ -224,35 +225,72 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
-    //usleep(10*1000*1000);
-
-    // Initialize the Viewer thread and launch
-    // Viewer.enable（yaml）优先：有则覆盖构造参数；无则沿用 bUseViewer
-    bool bViewerEnabled = bUseViewer;
-    {
-        cv::FileNode nodeViewerEnable = fsSettings["Viewer.enable"];
-        if(!nodeViewerEnable.empty())
-            bViewerEnabled = static_cast<int>(nodeViewerEnable) != 0;
-        else if(settings_)
-            bViewerEnabled = bUseViewer && settings_->viewerEnable();
-    }
-    if(bViewerEnabled)
-    {
-        mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile,settings_);
-        mptViewer = new thread(&Viewer::Run, mpViewer);
-        mpTracker->SetViewer(mpViewer);
-        mpLoopCloser->mpViewer = mpViewer;
-        mpViewer->both = mpFrameDrawer->both;
-        cout << "ORB Viewer enabled" << endl;
-    }
-    else
-    {
-        cout << "ORB Viewer disabled" << endl;
-    }
+    // Offline sync: do not start Viewer, LocalMapping, or LoopClosing threads.
+    mpViewer = static_cast<Viewer*>(NULL);
+    cout << "Offline synchronous backend: LocalMapping / LoopClosing / GBA run inside Track*()" << endl;
+    cout << "ORB Viewer disabled (offline single-thread)" << endl;
 
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
+    (void)bUseViewer;
+}
+
+void System::ApplyLocalizationModeChange()
+{
+    unique_lock<mutex> lock(mMutexMode);
+    if(mbActivateLocalizationMode)
+    {
+        mpTracker->InformOnlyTracking(true);
+        mbActivateLocalizationMode = false;
+    }
+    if(mbDeactivateLocalizationMode)
+    {
+        mpTracker->InformOnlyTracking(false);
+        mbDeactivateLocalizationMode = false;
+    }
+}
+
+System::BackendResult System::RunOfflineBackend()
+{
+    // 调用LocalMapping和LoopClosing优化模块进行处理
+    mpLocalMapper->ProcessUntilIdle();
+    mpLoopCloser->ProcessUntilIdle();
+
+    assert(!mpLocalMapper->HasPendingKeyFrames());
+    assert(!mpLoopCloser->HasPendingKeyFrames());
+    assert(!mpLoopCloser->isRunningGBA());
+    assert(!mpLocalMapper->IsAbortBA());
+    assert(!mpLoopCloser->isStopGBA());
+
+    if(mpLocalMapper->mbBadImu)
+        return BackendResult::BAD_IMU;
+    return BackendResult::SUCCESS;
+}
+
+Sophus::SE3f System::AfterGrabImage(const Sophus::SE3f &Tcw)
+{
+    const unsigned long frameId = mpTracker->mCurrentFrame.mnId;
+    // 进入后端优化模块
+    BackendResult backendResult = RunOfflineBackend();
+    if(backendResult == BackendResult::BAD_IMU || backendResult == BackendResult::MAP_RESET)
+    {
+        unsigned long kfId = 0;
+        if(mpLocalMapper->GetCurrKF())
+            kfId = mpLocalMapper->GetCurrKF()->mnId;
+        cout << "[Frame " << frameId << "] backend "
+             << (backendResult == BackendResult::BAD_IMU ? "BAD_IMU" : "MAP_RESET")
+             << " KF " << kfId << endl;
+        mpTracker->ResetActiveMap();
+    }
+
+    cout << "[Frame " << frameId << "] Tracking transaction finished" << endl;
+
+    unique_lock<mutex> lock2(mMutexState);
+    mTrackingState = mpTracker->mState;
+    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
+    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    return Tcw;
 }
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
@@ -282,29 +320,7 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         imRightToFeed = imRight.clone();
     }
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
+    ApplyLocalizationModeChange();
 
     // Check reset
     {
@@ -326,17 +342,11 @@ Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, 
         for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
             mpTracker->GrabImuData(vImuMeas[i_imu]);
 
-    // std::cout << "start GrabImageStereo" << std::endl;
+    cout << "[Frame " << Frame::nNextId << "] Tracking begin" << endl;
+    // 正式track双目图像入口
     Sophus::SE3f Tcw = mpTracker->GrabImageStereo(imLeftToFeed,imRightToFeed,timestamp,filename);
-
-    // std::cout << "out grabber" << std::endl;
-
-    unique_lock<mutex> lock2(mMutexState);
-    mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
-
-    return Tcw;
+    // track结束，调用优化模块进行处理
+    return AfterGrabImage(Tcw);
 }
 
 Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
@@ -357,29 +367,7 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
         cv::resize(depthmap,imDepthToFeed,settings_->newImSize());
     }
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
+    ApplyLocalizationModeChange();
 
     // Check reset
     {
@@ -401,13 +389,9 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
         for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
             mpTracker->GrabImuData(vImuMeas[i_imu]);
 
+    cout << "[Frame " << Frame::nNextId << "] Tracking begin" << endl;
     Sophus::SE3f Tcw = mpTracker->GrabImageRGBD(imToFeed,imDepthToFeed,timestamp,filename);
-
-    unique_lock<mutex> lock2(mMutexState);
-    mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
-    return Tcw;
+    return AfterGrabImage(Tcw);
 }
 
 Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
@@ -432,29 +416,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         imToFeed = resizedIm;
     }
 
-    // Check mode change
-    {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
-
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
-        {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
-        }
-    }
+    ApplyLocalizationModeChange();
 
     // Check reset
     {
@@ -477,14 +439,9 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
             mpTracker->GrabImuData(vImuMeas[i_imu]);
 
+    cout << "[Frame " << Frame::nNextId << "] Tracking begin" << endl;
     Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed,timestamp,filename);
-
-    unique_lock<mutex> lock2(mMutexState);
-    mTrackingState = mpTracker->mState;
-    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
-
-    return Tcw;
+    return AfterGrabImage(Tcw);
 }
 
 
@@ -517,7 +474,9 @@ bool System::MapChanged()
 void System::Reset()
 {
     unique_lock<mutex> lock(mMutexReset);
-    mbReset = true;
+    mpTracker->Reset();
+    mbReset = false;
+    mbResetActiveMap = false;
 }
 
 void System::ResetActiveMap()
@@ -535,29 +494,7 @@ void System::Shutdown()
 
     cout << "Shutdown" << endl;
 
-    mpLocalMapper->RequestFinish();
-    mpLoopCloser->RequestFinish();
-    /*if(mpViewer)
-    {
-        mpViewer->RequestFinish();
-        while(!mpViewer->isFinished())
-            usleep(5000);
-    }*/
-
-    // Wait until all thread have effectively stopped
-    /*while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
-    {
-        if(!mpLocalMapper->isFinished())
-            cout << "mpLocalMapper is not finished" << endl;*/
-        /*if(!mpLoopCloser->isFinished())
-            cout << "mpLoopCloser is not finished" << endl;
-        if(mpLoopCloser->isRunningGBA()){
-            cout << "mpLoopCloser is running GBA" << endl;
-            cout << "break anyway..." << endl;
-            break;
-        }*/
-        /*usleep(5000);
-    }*/
+    RunOfflineBackend();
 
     if(!mStrSaveAtlasToFile.empty())
     {

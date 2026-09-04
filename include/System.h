@@ -98,9 +98,17 @@ public:
         BINARY_FILE=1,
     };
 
+    enum class BackendResult
+    {
+        SUCCESS,
+        OPTIMIZATION_FAILED,
+        MAP_RESET,
+        BAD_IMU
+    };
+
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
+    // Initialize the SLAM system. Local Mapping, Loop Closing and GBA run synchronously inside Track*().
     System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
@@ -133,8 +141,7 @@ public:
     void Reset();
     void ResetActiveMap();
 
-    // All threads will be requested to finish.
-    // It waits until all threads have finished.
+    // All pending mapping/loop/GBA work is finished before this returns.
     // This function must be called before saving the trajectory.
     void Shutdown();
     bool isShutDown();
@@ -196,6 +203,10 @@ public:
 
 private:
 
+    BackendResult RunOfflineBackend();
+    void ApplyLocalizationModeChange();
+    Sophus::SE3f AfterGrabImage(const Sophus::SE3f &Tcw);
+
     void SaveAtlas(int type);
     bool LoadAtlas(int type);
 
@@ -231,12 +242,6 @@ private:
 
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
-
-    // System threads: Local Mapping, Loop Closing, Viewer.
-    // The Tracking thread "lives" in the main execution thread that creates the System object.
-    std::thread* mptLocalMapping;
-    std::thread* mptLoopClosing;
-    std::thread* mptViewer;
 
     // Reset flag
     std::mutex mMutexReset;

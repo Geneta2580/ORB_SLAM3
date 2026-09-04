@@ -48,6 +48,7 @@
 
 #include <mutex>
 #include <chrono>
+#include <opencv2/highgui/highgui.hpp>
 
 
 using namespace std;
@@ -165,7 +166,23 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
                   << " (corner_sigma=" << mTagPoseOptParams.corner_sigma
                   << ", min_inlier_corners=" << mTagPoseOptParams.min_inlier_corners
                   << ", fixed_only=" << (mTagPoseOptParams.fixed_only ? 1 : 0)
+                  << ", factor_weight=" << (mTagPoseOptParams.factor_weight.enable ? 1 : 0)
                   << ")" << std::endl;
+        if(mTagPoseOptParams.factor_weight.enable)
+        {
+            const auto &w = mTagPoseOptParams.factor_weight;
+            std::cout << "Tag factor weight"
+                      << " alpha=" << w.alpha
+                      << " S_sat=" << w.s_sat
+                      << " lambda_s=" << w.lambda_s
+                      << " theta0_deg=" << w.theta0_deg
+                      << " lambda_theta=" << w.lambda_theta
+                      << " phi0_deg=" << w.phi0_deg
+                      << " e0=" << w.e0
+                      << " lambda_amb=" << w.lambda_amb
+                      << " w_min=" << w.w_min
+                      << std::endl;
+        }
     }
 
 #ifdef HAS_APRILTAG
@@ -190,6 +207,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
                 enable_show_orb = static_cast<int>(node);
         }
         mbTagSaveVis = (enable_save_vis != 0);
+        // 与旧 Pangolin Viewer 的 Current Frame / Tag Detect 窗共用 Tag.show_in_orb_viewer
         mbTagShowInOrbViewer = (enable_show_orb != 0);
         if(mbTagSaveVis)
         {
@@ -205,16 +223,15 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         if(mbTagShowInOrbViewer)
         {
             std::cout << "Tag overlay on ORB Current Frame enabled"
-                      << " (+ Tag Detect window)" << std::endl;
+                      << " (offline imshow: Current Frame + Tag Detect, no Pangolin)"
+                      << std::endl;
             // PinHole 双目默认 only left；开叠加时并排显示左右图以便看右目 Tag
             if(mSensor == System::STEREO || mSensor == System::IMU_STEREO)
                 mpFrameDrawer->both = true;
         }
         if(enable_tag_viewer != 0)
         {
-            mpTagViewer = new tag::TagViewer(strSettingPath);
-            mpTagViewer->Start();
-            std::cout << "TagViewer enabled (Tag.viewer=1)" << std::endl;
+            std::cout << "TagViewer requested but disabled in offline sync mode" << std::endl;
         }
     }
 #endif
@@ -2313,6 +2330,7 @@ void Tracking::Track()
         // 初始化阶段也刷新 OpenCV 窗（原图 ORB + Tag 检测图）；失败时下一句会 return
         if(mpFrameDrawer)
             mpFrameDrawer->Update(this);
+        ShowOfflineImshowWindows();
 
         if(mState!=OK) // If rightly initialized, mState=OK
         {
@@ -2604,6 +2622,7 @@ void Tracking::Track()
 
         // Update drawer
         mpFrameDrawer->Update(this);
+        ShowOfflineImshowWindows();
         if(mCurrentFrame.isSet())
             mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
 
@@ -2845,6 +2864,7 @@ void Tracking::StereoInitialization()
         Verbose::PrintMess("New Map created with " + to_string(mpAtlas->MapPointsInMap()) + " points", Verbose::VERBOSITY_QUIET);
 
         mpLocalMapper->InsertKeyFrame(pKFini);
+        std::cout << "[Frame " << mCurrentFrame.mnId << "] KF " << pKFini->mnId << " inserted" << std::endl;
 
         mLastFrame = Frame(mCurrentFrame);
         mnLastKeyFrameId = mCurrentFrame.mnId;
@@ -3042,6 +3062,10 @@ void Tracking::CreateInitialMapMonocular()
 
     mpLocalMapper->InsertKeyFrame(pKFini);
     mpLocalMapper->InsertKeyFrame(pKFcur);
+    std::cout << "[Frame " << mCurrentFrame.mnId << "] KF " << pKFini->mnId
+              << " inserted" << std::endl;
+    std::cout << "[Frame " << mCurrentFrame.mnId << "] KF " << pKFcur->mnId
+              << " inserted" << std::endl;
     mpLocalMapper->mFirstTs=pKFcur->mTimeStamp;
 
     mCurrentFrame.SetPose(pKFcur->GetPose());
@@ -3522,15 +3546,6 @@ bool Tracking::NeedNewKeyFrame()
     if(mbOnlyTracking)
         return false;
 
-    // If Local Mapping is freezed by a Loop Closure do not insert keyframes
-    if(mpLocalMapper->isStopped() || mpLocalMapper->stopRequested()) {
-        /*if(mSensor == System::MONOCULAR)
-        {
-            std::cout << "NeedNewKeyFrame: localmap stopped" << std::endl;
-        }*/
-        return false;
-    }
-
     const int nKFs = mpAtlas->KeyFramesInMap();
 
     // Do not insert keyframes if not enough frames have passed from last relocalisation
@@ -3544,9 +3559,6 @@ bool Tracking::NeedNewKeyFrame()
     if(nKFs<=2)
         nMinObs=2;
     int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
-
-    // Local Mapping accept keyframes?
-    bool bLocalMappingIdle = mpLocalMapper->AcceptKeyFrames();
 
     // Check how many "close" points are being tracked and how many could be potentially created.
     int nNonTrackedClose = 0;
@@ -3600,8 +3612,8 @@ bool Tracking::NeedNewKeyFrame()
 
     // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
     const bool c1a = mCurrentFrame.mnId>=mnLastKeyFrameId+mMaxFrames;
-    // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
-    const bool c1b = ((mCurrentFrame.mnId>=mnLastKeyFrameId+mMinFrames) && bLocalMappingIdle); //mpLocalMapper->KeyframesInQueue() < 2);
+    // Condition 1b: More than "MinFrames" have passed from last keyframe
+    const bool c1b = (mCurrentFrame.mnId>=mnLastKeyFrameId+mMinFrames);
     //Condition 1c: tracking is weak
     const bool c1c = mSensor!=System::MONOCULAR && mSensor!=System::IMU_MONOCULAR && mSensor!=System::IMU_STEREO && mSensor!=System::IMU_RGBD && (mnMatchesInliers<nRefMatches*0.25 || bNeedToInsertClose) ;
     // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
@@ -3666,28 +3678,7 @@ bool Tracking::NeedNewKeyFrame()
 
     if(((c1a||c1b||c1c) && c2)||c3 ||c4 || cTagNew)
     {
-        // If the mapping accepts keyframes, insert keyframe.
-        // Otherwise send a signal to interrupt BA
-        if(bLocalMappingIdle || mpLocalMapper->IsInitializing())
-        {
-            return true;
-        }
-        else
-        {
-            mpLocalMapper->InterruptBA();
-            if(mSensor!=System::MONOCULAR  && mSensor!=System::IMU_MONOCULAR)
-            {
-                if(mpLocalMapper->KeyframesInQueue()<3)
-                    return true;
-                else
-                    return false;
-            }
-            else
-            {
-                //std::cout << "NeedNewKeyFrame: localmap is busy" << std::endl;
-                return false;
-            }
-        }
+        return true;
     }
     else
         return false;
@@ -3699,9 +3690,6 @@ bool Tracking::CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResul
     // VIBA 仍会插帧；InitializeIMU 结尾若 delete 队列 KF，Tracking 的
     // mpLastKeyFrame 变野指针，end VIBA 2 后立刻 SIGSEGV。
     if(mpLocalMapper->IsInitializing())
-        return false;
-
-    if(!mpLocalMapper->SetNotStop(true))
         return false;
 
     Map *pMap = mpAtlas->GetCurrentMap();
@@ -3832,8 +3820,7 @@ bool Tracking::CreateNewKeyFrame(const tag::TagInitializer::Result *tagInitResul
     }
 
     mpLocalMapper->InsertKeyFrame(pKF);
-
-    mpLocalMapper->SetNotStop(false);
+    std::cout << "[Frame " << mCurrentFrame.mnId << "] KF " << pKF->mnId << " inserted" << std::endl;
 
     mnLastKeyFrameId = mCurrentFrame.mnId;
     mpLastKeyFrame = pKF;
@@ -4728,6 +4715,49 @@ double Tracking::GetConfiguredTagSize(int tag_id) const
 #endif
     (void)tag_id;
     return 0.16;
+}
+
+void Tracking::ShowOfflineImshowWindows()
+{
+    // 由 Tag.show_in_orb_viewer 控制；在 Track() 内同步调用，不另开 Viewer 线程
+    if(!mbTagShowInOrbViewer || !mpFrameDrawer)
+        return;
+
+    const float imageScale = GetImageScale();
+    cv::Mat im = mpFrameDrawer->DrawFrame(imageScale);
+    cv::Mat toShow;
+    if(mpFrameDrawer->both)
+    {
+        cv::Mat imRight = mpFrameDrawer->DrawRightFrame(imageScale);
+        if(!im.empty() && !imRight.empty() && im.rows == imRight.rows)
+            cv::hconcat(im, imRight, toShow);
+        else if(!im.empty() && !imRight.empty())
+        {
+            const int h = std::max(im.rows, imRight.rows);
+            if(im.rows != h)
+                cv::copyMakeBorder(im, im, 0, h - im.rows, 0, 0, cv::BORDER_CONSTANT);
+            if(imRight.rows != h)
+                cv::copyMakeBorder(imRight, imRight, 0, h - imRight.rows, 0, 0,
+                                   cv::BORDER_CONSTANT);
+            cv::hconcat(im, imRight, toShow);
+        }
+        else
+            toShow = im;
+    }
+    else
+    {
+        toShow = im;
+    }
+
+    if(!toShow.empty())
+        cv::imshow("ORB-SLAM3: Current Frame", toShow);
+
+    cv::Mat tagShow = mpFrameDrawer->DrawTagDetectFrame(imageScale);
+    if(!tagShow.empty())
+        cv::imshow("TagFusion: Tag Detect", tagShow);
+
+    if(!toShow.empty() || !tagShow.empty())
+        cv::waitKey(1);
 }
 
 float Tracking::GetImageScale()

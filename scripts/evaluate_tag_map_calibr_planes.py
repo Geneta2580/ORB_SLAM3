@@ -57,6 +57,44 @@ class TagGeom:
     corners: np.ndarray  # (4, 3)
     center: np.ndarray  # (3,)
     normal: np.ndarray  # (3,) unit
+    n_obs: int = 0
+    mean_w_bar: float | None = None
+    min_w_bar: float | None = None
+    mean_alpha_w: float | None = None
+    mean_w_s: float | None = None
+    mean_w_theta: float | None = None
+    mean_w_amb: float | None = None
+
+
+def _opt_float(row: dict[str, str], key: str) -> float | None:
+    raw = row.get(key)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    return float(text)
+
+
+def _opt_int(row: dict[str, str], key: str, default: int = 0) -> int:
+    raw = row.get(key)
+    if raw is None:
+        return default
+    text = str(raw).strip()
+    if not text:
+        return default
+    return int(float(text))
+
+
+def weight_color(w: float | None) -> str:
+    if w is None:
+        return "rgb(127,127,127)"
+    w = max(0.0, min(1.0, float(w)))
+    if w < 0.5:
+        t = w * 2.0
+        return f"rgb(242,{int(51 + t * (191 - 51))},26)"
+    t = (w - 0.5) * 2.0
+    return f"rgb({int(242 - t * (242 - 38))},{int(191 + t * (139 - 191))},{int(26 + t * (38 - 26))})"
 
 
 def load_tags(path: Path) -> dict[int, TagGeom]:
@@ -93,6 +131,13 @@ def load_tags(path: Path) -> dict[int, TagGeom]:
                 corners=corners,
                 center=center,
                 normal=n,
+                n_obs=_opt_int(row, "n_obs"),
+                mean_w_bar=_opt_float(row, "mean_w_bar"),
+                min_w_bar=_opt_float(row, "min_w_bar"),
+                mean_alpha_w=_opt_float(row, "mean_alpha_w"),
+                mean_w_s=_opt_float(row, "mean_w_s"),
+                mean_w_theta=_opt_float(row, "mean_w_theta"),
+                mean_w_amb=_opt_float(row, "mean_w_amb"),
             )
     return tags
 
@@ -145,6 +190,13 @@ def evaluate(tags: list[TagGeom]) -> dict:
                 "nx": n_tag[0],
                 "ny": n_tag[1],
                 "nz": n_tag[2],
+                "n_obs": t.n_obs,
+                "mean_w_bar": t.mean_w_bar,
+                "min_w_bar": t.min_w_bar,
+                "mean_alpha_w": t.mean_alpha_w,
+                "mean_w_s": t.mean_w_s,
+                "mean_w_theta": t.mean_w_theta,
+                "mean_w_amb": t.mean_w_amb,
             }
         )
 
@@ -225,6 +277,13 @@ def write_report(path: Path, rows: list[dict]) -> None:
         "nx",
         "ny",
         "nz",
+        "n_obs",
+        "mean_w_bar",
+        "min_w_bar",
+        "mean_alpha_w",
+        "mean_w_s",
+        "mean_w_theta",
+        "mean_w_amb",
     ]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -367,6 +426,24 @@ def _add_scene(
                 row=row,
                 col=col,
             )
+            fill = weight_color(t.mean_w_bar)
+            w_txt = (
+                f"w={t.mean_w_bar:.3f}" if t.mean_w_bar is not None else "w=n/a"
+            )
+            hover = (
+                f"{pr['plane']} id={t.tag_id}<br>"
+                f"{w_txt}<br>"
+                f"n_obs={t.n_obs}<br>"
+                f"n_err={r['normal_err_deg']:.3f}°<br>"
+                f"t_err={r['trans_err_cm']:.3f} cm"
+            )
+            if t.mean_w_s is not None:
+                hover += (
+                    f"<br>mean_wS={t.mean_w_s:.3f}"
+                    f"<br>mean_wTh={t.mean_w_theta:.3f}"
+                    f"<br>mean_wAmb={t.mean_w_amb:.3f}"
+                )
+            hover += "<extra></extra>"
             fig.add_trace(
                 go.Mesh3d(
                     x=c[:, 0],
@@ -375,17 +452,12 @@ def _add_scene(
                     i=[0, 0],
                     j=[1, 2],
                     k=[2, 3],
-                    color=color,
+                    color=fill,
                     opacity=0.62,
                     name=f"{pr['plane']} id {t.tag_id}",
                     legendgroup=f"{legend_group}-{pr['plane']}",
                     showlegend=False,
-                    hovertemplate=(
-                        f"{pr['plane']} id={t.tag_id}<br>"
-                        f"n_err={r['normal_err_deg']:.3f}°<br>"
-                        f"t_err={r['trans_err_cm']:.3f} cm"
-                        "<extra></extra>"
-                    ),
+                    hovertemplate=hover,
                 ),
                 row=row,
                 col=col,
@@ -405,14 +477,19 @@ def _add_scene(
                 row=row,
                 col=col,
             )
+            label = (
+                f"{t.tag_id} w={t.mean_w_bar:.2f}"
+                if t.mean_w_bar is not None
+                else str(t.tag_id)
+            )
             fig.add_trace(
                 go.Scatter3d(
                     x=[t.center[0]],
                     y=[t.center[1]],
                     z=[t.center[2]],
                     mode="text",
-                    text=[str(t.tag_id)],
-                    textfont=dict(size=12, color="black"),
+                    text=[label],
+                    textfont=dict(size=11, color="black"),
                     showlegend=False,
                     hoverinfo="skip",
                 ),
@@ -556,7 +633,8 @@ def build_figure(sel_planes: list[dict], mir_planes: list[dict]) -> go.Figure:
         title=(
             "Calibr-board multi-plane eval (selected vs unused IPPE mirror)<br>"
             f"<sup>selected: {_summary_line(sel_planes)}<br>"
-            f"mirror: {_summary_line(mir_planes)}</sup>"
+            f"mirror: {_summary_line(mir_planes)}<br>"
+            "Tag fill/label = mean factor weight w_bar (red=suppressed, green=full)</sup>"
         ),
         scene=scene,
         scene2=scene,

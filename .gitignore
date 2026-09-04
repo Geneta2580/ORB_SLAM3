@@ -98,4 +98,4 @@ tag_vis/
 OnlineCameraTrajectory.txt
 imu_pose.txt
 Examples/TagFusion/XREAL_Glass/log.txt
-Examples/TagFusion/XREAL_Glass/log_*.txt
+Examples/TagFusion/XREAL_Glass/log_*.txtExamples/TagFusion/XREAL_Glass/log.txt

@@ -2,12 +2,13 @@
 
 #--------------------------------------------------------------------------------------------
 # XREAL Glass cam0+cam1+imu0 — TagFusion stereo-inertial
-# Dataset: q3hy/20260807 (SN L623X00088)
+# Sequence: /home/geneta/dataset/01-1
+# Device: q3hy (SN L623X00088)
 #
 # Path layout（与 stereo_inertial_xreal_glass_tag 搜索逻辑兼容）:
-#   .../01-1
-#   .../01-1/raw_data/glass
-#   .../01-1/raw_data/glass/cam0/images
+#   /home/geneta/dataset/01-1
+#   /home/geneta/dataset/01-1/raw_data/glass
+#   /home/geneta/dataset/01-1/raw_data/glass/cam0/images
 #
 # Resolved as:
 #   .../raw_data/glass/cam0/images  +  .../raw_data/glass/cam1/images
@@ -16,13 +17,17 @@
 #   imu0.txt: "<t> <temp> gx gy gz ax ay az"  （rad/s, m/s^2）
 #
 # Intrinsics / extrinsics from:
-#   .../01-1/ground_truth/calib/calib.yaml
+#   /home/geneta/dataset/01-1/ground_truth/calib/calib.yaml
 # Camera.model: fisheye6202 → ORB-SLAM3 KannalaBrandt8 使用 kc[0:4] 近似
 # Stereo.T_c1_c2 由 cam0_q_cam1 (Hamilton qx,qy,qz,qw) + cam0_p_cam1 构成
 # IMU.T_b_c1 由 cam0 的 imu_q_cam / imu_p_cam 构成（body = imu0）
 # Resolution (W x H): 640 x 512
 # Camera FPS: ~60
 # IMU: imu0.txt 实测 ~1000 Hz（勿写成 200）
+#
+# 运行:
+#   SETTINGS=./01-1_stereo+imu.yaml ./run_xreal_glass_stereo_inertial.sh \
+#     /home/geneta/dataset/01-1/raw_data/glass
 #--------------------------------------------------------------------------------------------
 
 File.version: "1.0"
@@ -115,7 +120,8 @@ ORBextractor.minThFAST: 7
 
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
-# 离线串行模式不启动 Pangolin；图像窗用 Tag.show_in_orb_viewer
+# 离线串行模式下不启动 Pangolin Viewer 线程；Viewer.enable / 下列 3D 参数均被忽略。
+# 图像窗请用下面的 Tag.show_in_orb_viewer（主线程 cv::imshow，只变慢、不改变串行顺序）。
 #--------------------------------------------------------------------------------------------
 Viewer.enable: 1
 Viewer.KeyFrameSize: 0.05
@@ -133,8 +139,9 @@ Viewer.showTagMap: 1
 Viewer.showTagKFs: 1
 
 #--------------------------------------------------------------------------------------------
-# Tag Parameters  （Tag.size 请按现场印刷边长核对；其余沿用 XREAL_Glass 样例）
+# Tag Parameters
 #--------------------------------------------------------------------------------------------
+Tag.enable: 1
 Tag.family: "tag36h11"
 Tag.hamming: 2
 Tag.black_border: 1
@@ -143,13 +150,13 @@ Tag.gamma: 0.5                  # <1 提亮暗部；1=关闭。已取消 CLAHE
 Tag.verbose: 1
 Tag.export: 1
 Tag.export_dir: "tag_export"
-Tag.viewer: 0                   # 离线模式忽略（不启 TagViewer 线程）
+Tag.viewer: 0                   # 离线模式下忽略（TagViewer 线程不启动）
 Tag.save_vis: 0
 Tag.save_vis_dir: "tag_vis"
 Tag.show_in_orb_viewer: 1       # 1=主线程 imshow：Current Frame（ORB+Tag）+ Tag Detect；不启 Pangolin
 
 # ========================== local BA配置 ==========================
-Tag.pose_optimization: 0   # 纯视觉 PoseOptimization 与惯性 PoseInertial* 共用（运行时只走当前传感器对应的一条分支）
+Tag.pose_optimization: 1   # 纯视觉 PoseOptimization 与惯性 PoseInertial* 共用（运行时只走当前传感器对应的一条分支）
 Tag.corner_sigma: 2.0
 Tag.min_inlier_corners: 3
 Tag.fixed_only: 0
@@ -160,7 +167,7 @@ Tag.local_ba.min_inlier_corners: 3
 Tag.local_ba.verbose: 1
 
 # ========================== 角点因子自适应权重配置 ==========================
-Tag.factor_weight.enable: 0
+Tag.factor_weight.enable: 1
 Tag.factor_weight.alpha: 3.0          # Tag / feature 基础权重比
 Tag.factor_weight.s_sat: 400.0        # 基本满权面积 px^2
 Tag.factor_weight.lambda_s: 3.0
@@ -170,7 +177,7 @@ Tag.factor_weight.phi0_deg: 15.0      # IPPE 双解显著旋转差
 Tag.factor_weight.e0: 1.0             # 双解 residual 区分尺度 px
 Tag.factor_weight.lambda_amb: 0.0         # 0=关闭双解项（w_amb≡1）
 Tag.factor_weight.w_min: 0.001
-Tag.factor_weight.verbose: 0          # 1=打印 S,θ,Δφ,Δe 与各分项权重
+Tag.factor_weight.verbose: 1          # 1=打印 S,θ,Δφ,Δe 与各分项权重
 
 # ========================== 回环配置 ==========================
 Tag.loop.enable: 1

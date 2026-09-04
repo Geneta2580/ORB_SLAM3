@@ -5,6 +5,7 @@
 #include "ua_tag/MapTagData.h"
 #include "ua_tag/TagFrameData.h"
 #include "ua_tag/TagObservation.h"
+#include "ua_tag/TagPoseConstraints.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,6 +14,7 @@
 #include <limits>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <utility>
 #include <vector>
 
 namespace ORB_SLAM3 {
@@ -32,10 +34,47 @@ bool EnsureDir(const std::string &dirPath)
     return mkdir(dirPath.c_str(), 0755) == 0;
 }
 
+MapTagData::FactorVizWeight ToVizWeight(const TagFactorWeightSummary &w)
+{
+    MapTagData::FactorVizWeight viz;
+    viz.valid = w.valid;
+    viz.n_obs = w.n_obs;
+    viz.mean_area = w.mean_area;
+    viz.mean_w_s = w.mean_w_s;
+    viz.mean_w_theta = w.mean_w_theta;
+    viz.mean_w_amb = w.mean_w_amb;
+    viz.mean_w_obs = w.mean_w_obs;
+    viz.mean_w_bar = w.mean_w_bar;
+    viz.min_w_bar = w.min_w_bar;
+    viz.max_w_bar = w.max_w_bar;
+    viz.mean_alpha_w = w.mean_alpha_w;
+    return viz;
+}
+
+TagFactorWeightSummary FromVizWeight(const MapTagData::FactorVizWeight &viz)
+{
+    TagFactorWeightSummary w;
+    if(!viz.valid)
+        return w;
+    w.valid = true;
+    w.n_obs = viz.n_obs;
+    w.mean_area = viz.mean_area;
+    w.mean_w_s = viz.mean_w_s;
+    w.mean_w_theta = viz.mean_w_theta;
+    w.mean_w_amb = viz.mean_w_amb;
+    w.mean_w_obs = viz.mean_w_obs;
+    w.mean_w_bar = viz.mean_w_bar;
+    w.min_w_bar = viz.min_w_bar;
+    w.max_w_bar = viz.max_w_bar;
+    w.mean_alpha_w = viz.mean_alpha_w;
+    return w;
+}
+
 }  // namespace
 
-TagMapExporter::TagMapExporter(const std::string &output_dir)
-    : mOutputDir(output_dir)
+TagMapExporter::TagMapExporter(const std::string &output_dir,
+                               TagFactorWeightParams factor_weight)
+    : mOutputDir(output_dir), mFactorWeight(std::move(factor_weight))
 {
     if(mOutputDir.empty())
         return;
@@ -340,7 +379,9 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         << "c0_x,c0_y,c0_z,"
         << "c1_x,c1_y,c1_z,"
         << "c2_x,c2_y,c2_z,"
-        << "c3_x,c3_y,c3_z\n";
+        << "c3_x,c3_y,c3_z,"
+        << "n_obs,mean_area,mean_w_s,mean_w_theta,mean_w_amb,mean_w_obs,"
+        << "mean_w_bar,min_w_bar,max_w_bar,mean_alpha_w\n";
 
     std::vector<Map::MapTagPtr> tags = map.GetAllMapTags();
     // 按 tag_id 排序，便于对比
@@ -353,7 +394,26 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
                   return a->Id() < b->Id();
               });
 
+    auto write_weight_fields = [&](const TagFactorWeightSummary &w) {
+        ofs << "," << w.n_obs;
+        if(!w.valid)
+        {
+            ofs << ",,,,,,,,,";
+            return;
+        }
+        ofs << "," << w.mean_area
+            << "," << w.mean_w_s
+            << "," << w.mean_w_theta
+            << "," << w.mean_w_amb
+            << "," << w.mean_w_obs
+            << "," << w.mean_w_bar
+            << "," << w.min_w_bar
+            << "," << w.max_w_bar
+            << "," << w.mean_alpha_w;
+    };
+
     std::size_t n_with_corners = 0;
+    std::vector<std::pair<int, TagFactorWeightSummary>> weight_rows;
     for(const auto &map_tag : tags)
     {
         if(!map_tag)
@@ -377,7 +437,26 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
         {
             ofs << ",,,,,,,,,,,,";
         }
+
+        TagFactorWeightSummary w =
+            SummarizeMapTagFactorWeight(*map_tag, mFactorWeight);
+        // KF 剔除会清掉 MapTag 观测，但位姿仍在。保留上次有效汇总，避免最终 CSV 变成 n/a。
+        if(w.valid)
+        {
+            map_tag->SetFactorVizWeight(ToVizWeight(w));
+        }
+        else
+        {
+            const TagFactorWeightSummary cached =
+                FromVizWeight(map_tag->GetFactorVizWeight());
+            if(cached.valid)
+                w = cached;
+        }
+        write_weight_fields(w);
         ofs << "\n";
+
+        if(!mirror && w.valid)
+            weight_rows.emplace_back(map_tag->Id(), w);
     }
 
     ofs.close();
@@ -388,6 +467,32 @@ bool TagMapExporter::WriteTagCornersCsv(Map &map, const std::string &filename,
                   << " -> " << path
                   << " num_tags=" << tags.size()
                   << " with_corners=" << n_with_corners << std::endl;
+        if(!mirror && !weight_rows.empty())
+        {
+            std::sort(weight_rows.begin(), weight_rows.end(),
+                      [](const auto &a, const auto &b) {
+                          return a.second.mean_w_bar < b.second.mean_w_bar;
+                      });
+            std::cout << "[TagMapExporter] tag factor weights "
+                      << "(same formula as [TagW], mean over detect-valid KF obs; "
+                      << "sorted by mean_w_bar, low=suppressed; "
+                      << "applied_in_ba="
+                      << (mFactorWeight.enable ? 1 : 0) << "):\n";
+            for(const auto &row : weight_rows)
+            {
+                const TagFactorWeightSummary &w = row.second;
+                std::cout << "  tag=" << row.first
+                          << " n_obs=" << w.n_obs
+                          << " mean_wBar=" << w.mean_w_bar
+                          << " min_wBar=" << w.min_w_bar
+                          << " max_wBar=" << w.max_w_bar
+                          << " mean_wS=" << w.mean_w_s
+                          << " mean_wTh=" << w.mean_w_theta
+                          << " mean_wAmb=" << w.mean_w_amb
+                          << " mean_alpha_w=" << w.mean_alpha_w
+                          << std::endl;
+            }
+        }
     }
     return true;
 }

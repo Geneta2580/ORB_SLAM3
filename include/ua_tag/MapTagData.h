@@ -83,6 +83,35 @@ public:
     std::size_t Observations() const;
     bool Empty() const { return Observations() == 0; }
 
+    // 导出 / 在线覆盖时写入：供 Pangolin 在 Tag 上显示 mean w_bar
+    struct FactorVizWeight
+    {
+        bool valid = false;
+        int n_obs = 0;
+        float mean_area = 0.0f;
+        float mean_w_s = 1.0f;
+        float mean_w_theta = 1.0f;
+        float mean_w_amb = 1.0f;
+        float mean_w_obs = 1.0f;
+        float mean_w_bar = 1.0f;
+        float min_w_bar = 1.0f;
+        float max_w_bar = 0.0f;
+        float mean_alpha_w = 1.0f;
+    };
+    void SetFactorVizWeight(const FactorVizWeight &w);
+    FactorVizWeight GetFactorVizWeight() const;
+
+    // 分层选择参考观测 KF；无合格观测返回 nullptr。
+    // allow_unresolved_fallback: 全部历史观测未消歧时是否允许回退；回环锚点应传 false。
+    KeyFrame *SelectReferenceKeyFrame(int min_inlier_corners = 3,
+                                      bool allow_unresolved_fallback = true) const;
+
+    // Loop closing / GBA 暂存（对齐 MapPoint，不加锁）
+    unsigned long mnCorrectedByKF = 0;
+    unsigned long mnCorrectedReference = 0;
+    Sophus::SE3f mTwtGBA;
+    unsigned long mnBAGlobalForKF = 0;
+
 private:
     friend class ORB_SLAM3::KeyFrame;
     friend class ORB_SLAM3::Map;
@@ -93,7 +122,7 @@ private:
 
     // mMutexPose: mTwt / mbHasPose / mTwtMirror / mbHasMirrorPose / mTagSize
     mutable std::mutex mMutexPose;
-    // mMutexFeatures: mObservations / mState；mpMap 由 Map 在持有 Map 锁时写入
+    // mMutexFeatures: mObservations / mState / mFactorVizWeight；mpMap 由 Map 在持有 Map 锁时写入
     mutable std::mutex mMutexFeatures;
 
     int mnId = -1;
@@ -107,6 +136,8 @@ private:
 
     MapTagState mState = MapTagState::CANDIDATE;
     KeyFrameObservations mObservations;
+
+    FactorVizWeight mFactorVizWeight;
 
     Map *mpMap = nullptr;
 };

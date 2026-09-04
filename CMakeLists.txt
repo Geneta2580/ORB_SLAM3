@@ -273,6 +273,10 @@ add_executable(stereo_test_tag
         Examples/TagFusion/test/stereo_test_tag.cc)
 target_link_libraries(stereo_test_tag ${PROJECT_NAME})
 
+add_executable(stereo_inertial_test_tag
+        Examples/TagFusion/test/stereo_inertial_test_tag.cc)
+target_link_libraries(stereo_inertial_test_tag ${PROJECT_NAME})
+
 add_executable(test_tag_corner_jac
         Examples/TagFusion/test/test_tag_corner_jac.cc)
 target_link_libraries(test_tag_corner_jac ${PROJECT_NAME})
@@ -305,6 +309,13 @@ if(ORB_SLAM3_WITH_APRILTAG)
     add_executable(ethz_tag_detect scripts/ethz_tag_detect_cli.cc)
     target_link_libraries(ethz_tag_detect apriltag ${OpenCV_LIBS})
     target_include_directories(ethz_tag_detect PRIVATE
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/include
+        ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/ethz_apriltag2/include)
+
+    find_package(Threads REQUIRED)
+    add_executable(ethz_tag_enhance_eval scripts/ethz_tag_enhance_eval.cc)
+    target_link_libraries(ethz_tag_enhance_eval apriltag ${OpenCV_LIBS} Threads::Threads)
+    target_include_directories(ethz_tag_enhance_eval PRIVATE
         ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/include
         ${PROJECT_SOURCE_DIR}/Thirdparty/apriltag/ethz_apriltag2/include)
 endif()

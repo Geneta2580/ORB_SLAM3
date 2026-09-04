@@ -349,9 +349,27 @@ bool KeyFrame::AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex)
         }
 
         MapTagAssociation assoc;
-        assoc.pMapTag = pTag;
-        assoc.leftObservationIndex = final_left;
-        assoc.rightObservationIndex = final_right;
+        if(it != mMapTagAssociations.end())
+        {
+            assoc = it->second;
+            assoc.leftObservationIndex = final_left;
+            assoc.rightObservationIndex = final_right;
+        }
+        else
+        {
+            assoc.pMapTag = pTag;
+            assoc.leftObservationIndex = final_left;
+            assoc.rightObservationIndex = final_right;
+            assoc.historicalObservationCount = pTag->Observations();
+            if(pTag->HasPose() && assoc.historicalObservationCount > 0)
+            {
+                // 保存当前 KF 关联前的最新 Tag pose（不是初始化 pose）。这是值拷贝：
+                // 本 KF 随后进入 Local BA 时即便 pTag->SetPose()，该快照仍保持不变，
+                // LoopClosing 因而使用的是本次 LBA 污染前的历史 T_wt。
+                assoc.historicalTagPose = pTag->GetPose();
+                assoc.hasHistoricalTagPose = true;
+            }
+        }
         mMapTagAssociations[tag_id] = assoc;
     }
 

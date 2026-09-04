@@ -879,6 +879,41 @@ public:
     int cam_idx = 0;
 };
 
+// 固定世界角点 → 当前 KF 4DoF 位姿的 unary 边（只优化 yaw+xyz）。
+// e = u - π_cam(Xw)；世界点由冻结历史 T_wt 生成，不优化 Tag。
+// 第一版使用 g2o 数值 Jacobian。
+class EdgeTagCornerPose4DoF : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, VertexPose4DoF>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+
+    explicit EdgeTagCornerPose4DoF(int camIdx = 0)
+        : cam_idx(camIdx) {}
+
+    void computeError() override
+    {
+        const auto *vPose =
+            static_cast<const VertexPose4DoF *>(_vertices[0]);
+
+        _error = _measurement -
+                 vPose->estimate().Project(Xw, cam_idx);
+    }
+
+    bool isDepthPositive() const
+    {
+        const auto *vPose =
+            static_cast<const VertexPose4DoF *>(_vertices[0]);
+
+        return vPose->estimate().isDepthPositive(Xw, cam_idx);
+    }
+
+    bool read(std::istream &) override { return false; }
+    bool write(std::ostream &) const override { return false; }
+
+    Eigen::Vector3d Xw = Eigen::Vector3d::Zero();
+    int cam_idx = 0;
+};
+
 bool TestTagCornerInertialEdgeJacobians(double *max_abs_err = nullptr);
 
 } //namespace ORB_SLAM2

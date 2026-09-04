@@ -55,13 +55,20 @@ public:
 
     void SetTagLocalBAParams(const tag::TagLocalBAParams &params);
 
-    // Main function
-    void Run();
+    // Offline synchronous processing (replaces the old Run() thread loop)
+    bool ProcessOneKeyFrame();
+    void ProcessUntilIdle();
+    bool HasPendingKeyFrames();
+    bool IsAbortBA() const { return mbAbortBA; }
 
     void InsertKeyFrame(KeyFrame* pKF);
     void EmptyQueue();
 
-    // Thread Synch
+    void ResetSynchronously();
+    void ResetActiveMapSynchronously(Map* pMap);
+
+    // Compatibility stubs (no background LocalMapping thread)
+    void Run();
     void RequestStop();
     void RequestReset();
     void RequestResetActiveMap(Map* pMap);

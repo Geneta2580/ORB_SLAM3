@@ -5,6 +5,7 @@
 #include "Map.h"
 #include "ua_tag/MapTagData.h"
 #include "ua_tag/TagMapExporter.h"
+#include "ua_tag/TagPoseConstraints.h"
 
 #include <iostream>
 
@@ -39,7 +40,10 @@ TagTracker::TagTracker(const std::string &settingsFile)
         export_dir = static_cast<std::string>(node);
 
     if(enable_export)
-        mpExporter = std::make_unique<TagMapExporter>(export_dir);
+    {
+        mpExporter = std::make_unique<TagMapExporter>(
+            export_dir, TagFactorWeightParams::FromSettings(settingsFile));
+    }
 }
 
 void TagTracker::LogCameraPose(const Frame &frame)

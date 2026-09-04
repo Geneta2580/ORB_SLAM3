@@ -27,10 +27,11 @@
 #include "Tracking.h"
 
 #include "KeyFrameDatabase.h"
+#include "ua_tag/TagPoseConstraints.h"
 
 #include <boost/algorithm/string.hpp>
-#include <thread>
 #include <mutex>
+#include <unordered_map>
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
 namespace ORB_SLAM3
@@ -58,15 +59,28 @@ public:
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
 
-    // Main function
-    void Run();
+    void SetTagLoopParams(const tag::TagLoopParams &params);
+    void SetTagLocalBAParams(const tag::TagLocalBAParams &params);
+
+    // Offline synchronous processing (replaces the old Run() thread loop)
+    bool ProcessOneKeyFrame();
+    void ProcessUntilIdle();
+    bool HasPendingKeyFrames();
+    bool isStopGBA(){
+        unique_lock<std::mutex> lock(mMutexGBA);
+        return mbStopGBA;
+    }
 
     void InsertKeyFrame(KeyFrame *pKF);
 
+    void ResetSynchronously();
+    void ResetActiveMapSynchronously(Map* pMap);
+
+    // Compatibility stubs (no background LoopClosing thread)
+    void Run();
     void RequestReset();
     void RequestResetActiveMap(Map* pMap);
 
-    // This function will run in a separate thread
     void RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoopKF);
 
     bool isRunningGBA(){
@@ -137,6 +151,22 @@ protected:
     void SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap, vector<MapPoint*> &vpMapPoints);
     void SearchAndFuse(const vector<KeyFrame*> &vConectedKFs, vector<MapPoint*> &vpMapPoints);
 
+    bool DetectTagLoop();
+    bool EstimateTagLoopPose(const KeyFrame::MapTagAssociation &assoc,
+                             const Sophus::SE3f &historicalTwt,
+                             Sophus::SE3f &TcwTag, Sophus::SE3f &TctLeft,
+                             bool &bStereoConsistent, int &nValidCameras,
+                             std::string *failReason = nullptr);
+    bool ValidateTagLoop(const g2o::Sim3 &gScwTag, g2o::Sim3 &gScwTag4DoF);
+    // 用冻结历史 Tag 世界角点构建当前 KF 的回环 pose-only 约束；不读实时 MapTag::GetPose()
+    std::vector<tag::TagPoseConstraint> BuildTagLoopPoseConstraints(KeyFrame *pKF);
+    void CollectTagLoopMapPoints(KeyFrame *pMatchedKF, std::vector<MapPoint*> &vpMPs);
+    void ResetTagLoopState();
+    void ClearTagLoopReferences(const char *reason);
+    void PruneTagLoopReferences();
+    void EraseTagLoopReference(int tagId, const char *reason);
+    void ReleaseTagLoopHistoricalKF(KeyFrame *pKF);
+
     void CorrectLoop();
 
     void MergeLocal();
@@ -172,9 +202,9 @@ protected:
     float mnCovisibilityConsistencyTh;
 
     // Loop detector variables
-    KeyFrame* mpCurrentKF;
-    KeyFrame* mpLastCurrentKF;
-    KeyFrame* mpMatchedKF;
+    KeyFrame* mpCurrentKF = nullptr;
+    KeyFrame* mpLastCurrentKF = nullptr;
+    KeyFrame* mpMatchedKF = nullptr;
     std::vector<ConsistentGroup> mvConsistentGroups;
     std::vector<KeyFrame*> mvpEnoughConsistentCandidates;
     std::vector<KeyFrame*> mvpCurrentConnectedKFs;
@@ -189,25 +219,49 @@ protected:
     bool mbLoopDetected;
     int mnLoopNumCoincidences;
     int mnLoopNumNotFound;
-    KeyFrame* mpLoopLastCurrentKF;
+    KeyFrame* mpLoopLastCurrentKF = nullptr;
     g2o::Sim3 mg2oLoopSlw;
     g2o::Sim3 mg2oLoopScw;
-    KeyFrame* mpLoopMatchedKF;
+    KeyFrame* mpLoopMatchedKF = nullptr;
     std::vector<MapPoint*> mvpLoopMPs;
     std::vector<MapPoint*> mvpLoopMatchedMPs;
     bool mbMergeDetected;
     int mnMergeNumCoincidences;
     int mnMergeNumNotFound;
-    KeyFrame* mpMergeLastCurrentKF;
+    KeyFrame* mpMergeLastCurrentKF = nullptr;
     g2o::Sim3 mg2oMergeSlw;
     g2o::Sim3 mg2oMergeSmw;
     g2o::Sim3 mg2oMergeScw;
-    KeyFrame* mpMergeMatchedKF;
+    KeyFrame* mpMergeMatchedKF = nullptr;
     std::vector<MapPoint*> mvpMergeMPs;
     std::vector<MapPoint*> mvpMergeMatchedMPs;
     std::vector<KeyFrame*> mvpMergeConnectedKFs;
 
     g2o::Sim3 mSold_new;
+
+    tag::TagLoopParams mTagLoopParams;
+    tag::TagLocalBAParams mTagLocalBAParams;
+
+    bool mbTagLoopDetected = false;
+    int mnLoopTagId = -1;
+    tag::MapTagData *mpLoopTag = nullptr;
+    KeyFrame *mpTagLoopMatchedKF = nullptr;
+    Sophus::SE3f mTagLoopTwtHistory;
+    Sophus::SE3f mTagLoopTct;
+    g2o::Sim3 mg2oTagLoopScw;
+
+    int mnTagLoopCoincidences = 0;
+    int mnTagLoopNotFound = 0;
+    KeyFrame *mpTagLoopLastCurrentKF = nullptr;
+    g2o::Sim3 mg2oTagLoopLastScw;
+
+    struct TagLoopReference
+    {
+        Sophus::SE3f frozenTwt;
+        KeyFrame *pHistoricalKF = nullptr;
+        unsigned long lastSeenKF = 0;
+    };
+    std::unordered_map<int, TagLoopReference> mTagLoopReferences;
     //-------
 
     long unsigned int mLastLoopKFid;
@@ -217,13 +271,9 @@ protected:
     bool mbFinishedGBA;
     bool mbStopGBA;
     std::mutex mMutexGBA;
-    std::thread* mpThreadGBA;
 
     // Fix scale in the stereo/RGB-D case
     bool mbFixScale;
-
-
-    int mnFullBAIdx;
 
 
 

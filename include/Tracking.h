@@ -174,7 +174,7 @@ public:
     bool mbTagEnabled = true;
     bool mbTagSaveVis = false;
     std::string mTagSaveVisDir = "tag_vis";
-    bool mbTagShowInOrbViewer = false;
+    bool mbTagShowInOrbViewer = false;  // yaml: Tag.show_in_orb_viewer；离线主线程 imshow
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -247,6 +247,10 @@ protected:
 
     // 统一 pose-only 入口：useTags 且开关开启时构建 Tag 快照并联合优化（入口内重置优化外点）
     int OptimizeCurrentPose(bool useTags);
+
+    // 离线模式不启动 Pangolin Viewer；仅 cv::imshow 两窗：
+    // ORB+Tag 混合当前帧，以及增强 Tag 检测图
+    void ShowOfflineImshowWindows();
 
     // Map initialization for stereo and RGB-D
     void StereoInitialization();

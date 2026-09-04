@@ -1,6 +1,8 @@
 #ifndef UA_TAG_TAG_MAP_EXPORTER_H
 #define UA_TAG_TAG_MAP_EXPORTER_H
 
+#include "ua_tag/TagPoseConstraints.h"
+
 #include <fstream>
 #include <string>
 #include <utility>
@@ -27,7 +29,8 @@ public:
     //                    / tag_camera_trajectory.txt(TUM)
     //                    / tag_detections.csv（每帧检测）
     //                    / tag_first_registration.csv（每个 MapTag 首次注册时几何）
-    explicit TagMapExporter(const std::string &output_dir);
+    explicit TagMapExporter(const std::string &output_dir,
+                            TagFactorWeightParams factor_weight = {});
     ~TagMapExporter();
 
     TagMapExporter(const TagMapExporter &) = delete;
@@ -57,7 +60,7 @@ public:
     // 初始化 Commit 成功后：对初始化 KF 上已关联的全部 MapTag 各记一行（首次注册）
     void LogKeyFrameMapTagFirstRegistrations(KeyFrame *pKF);
 
-    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标（可重复调用覆盖）
+    // 导出当前 Map 中全部 MapTag：tag_id + 四角点世界坐标 + 因子权重汇总（可重复调用覆盖）
     // 同时写出 tag_map_mirror_corners.csv（首次赋位姿时未选中的 IPPE 镜像解）
     // verbose=false 用于在线更新，避免刷屏
     bool SaveTagMapCorners(Map &map, bool verbose = true) const;
@@ -85,6 +88,7 @@ private:
                             bool verbose) const;
 
     std::string mOutputDir;
+    TagFactorWeightParams mFactorWeight;
     bool mbEnabled{false};
     mutable std::ofstream mTrajFile;
     mutable std::ofstream mDetFile;

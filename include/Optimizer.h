@@ -57,7 +57,9 @@ public:
     // 单目初始化 BA：薄封装，固定两帧位姿（从而固定基线长度），只优化地图点
     void static GlobalBundleAdjustmentInit(Map* pMap, int nIterations=5, bool *pbStopFlag=NULL,
                                            const unsigned long nLoopKF=0, const bool bRobust = true);
-    void static FullInertialBA(Map *pMap, int its, const bool bFixLocal=false, const unsigned long nLoopKF=0, bool *pbStopFlag=NULL, bool bInit=false, float priorG = 1e2, float priorA=1e6, Eigen::VectorXd *vSingVal = NULL, bool *bHess=NULL);
+    void static FullInertialBA(Map *pMap, int its, const bool bFixLocal=false, const unsigned long nLoopKF=0, bool *pbStopFlag=NULL, bool bInit=false, float priorG = 1e2, float priorA=1e6, Eigen::VectorXd *vSingVal = NULL, bool *bHess=NULL,
+                               const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
+                               int fixedLoopTagId = -1);
 
     void static LocalBundleAdjustment(KeyFrame* pKF, bool *pbStopFlag, Map *pMap, int& num_fixedKF, int& num_OptKF, int& num_MPs, int& num_edges,
                                       const tag::TagLocalBAParams &tagParams = tag::TagLocalBAParams(),
@@ -86,15 +88,43 @@ public:
                                        const LoopClosing::KeyFrameAndPose &NonCorrectedSim3,
                                        const LoopClosing::KeyFrameAndPose &CorrectedSim3,
                                        const map<KeyFrame *, set<KeyFrame *> > &LoopConnections,
-                                       const bool &bFixScale);
+                                       const bool &bFixScale,
+                                       tag::MapTagData *pLoopAnchorTag = nullptr);
     void static OptimizeEssentialGraph(KeyFrame* pCurKF, vector<KeyFrame*> &vpFixedKFs, vector<KeyFrame*> &vpFixedCorrectedKFs,
                                        vector<KeyFrame*> &vpNonFixedKFs, vector<MapPoint*> &vpNonCorrectedMPs);
+
+    struct TagLoopPoseOptStats
+    {
+        int inputTags = 0;
+        int inputEdges = 0;
+        int inputEdgesLeft = 0;
+        int inputEdgesRight = 0;
+        int inlierTags = 0;
+        int inlierCorners = 0;
+        double rmseBefore = -1.0;
+        double rmseAfter = -1.0;
+        std::vector<int> inlierTagIds;
+        std::vector<int> outlierTagIds;
+    };
+
+    // Tag 回环 4DoF pose-only（当前 KF 单顶点 yaw+xyz，不引入 ORB）：
+    // 两轮 Huber（各 10 次）→ 组级剔除（每相机≥3 角点内点，或左右合计≥6；Tag RMSE≤5px）
+    // → 至少 2 个内点 Tag 才返回成功，否则不提交回环。
+    static bool OptimizeTagLoopPose4DoF(
+        KeyFrame *pCurrentKF,
+        const std::vector<tag::TagPoseConstraint> &constraints,
+        const Sophus::SE3f &seedTcw,
+        Sophus::SE3f &refinedTcw,
+        TagLoopPoseOptStats *stats = nullptr,
+        float cornerSigma = 2.0f,
+        const tag::TagFactorWeightParams &factorWeight = tag::TagFactorWeightParams());
 
     // For inertial loopclosing
     void static OptimizeEssentialGraph4DoF(Map* pMap, KeyFrame* pLoopKF, KeyFrame* pCurKF,
                                        const LoopClosing::KeyFrameAndPose &NonCorrectedSim3,
                                        const LoopClosing::KeyFrameAndPose &CorrectedSim3,
-                                       const map<KeyFrame *, set<KeyFrame *> > &LoopConnections);
+                                       const map<KeyFrame *, set<KeyFrame *> > &LoopConnections,
+                                       tag::MapTagData *pLoopAnchorTag = nullptr);
 
 
     // if bFixScale is true, optimize SE3 (stereo,rgbd), Sim3 otherwise (mono) (NEW)

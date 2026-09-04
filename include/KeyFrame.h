@@ -271,6 +271,13 @@ public:
         tag::MapTagData *pMapTag = nullptr;
         int leftObservationIndex = -1;
         int rightObservationIndex = -1;
+
+        // 当前 KF 首次关联该 Tag 前冻结的最新世界位姿快照，而非 Tag 的初始化位姿。
+        // 该快照通常代表“当前 KF 到来前”的最新 T_wt；后续本次 Local BA 即使
+        // 修改 MapTagData::mTwt，也不会回写这里，因此 Tag loop 可避开本次 LBA 污染。
+        Sophus::SE3f historicalTagPose;
+        bool hasHistoricalTagPose = false;
+        size_t historicalObservationCount = 0;
     };
 
     bool AddMapTag(tag::MapTagData *pTag, int leftIndex, int rightIndex);

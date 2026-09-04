@@ -24,9 +24,21 @@
 #include "Optimizer.h"
 #include "ORBmatcher.h"
 #include "G2oTypes.h"
+#include "Map.h"
+#include "ua_tag/MapTagData.h"
+#include "ua_tag/TagObservation.h"
 
-#include<mutex>
-#include<thread>
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <iostream>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 
 namespace ORB_SLAM3
@@ -35,7 +47,7 @@ namespace ORB_SLAM3
 LoopClosing::LoopClosing(Atlas *pAtlas, KeyFrameDatabase *pDB, ORBVocabulary *pVoc, const bool bFixScale, const bool bActiveLC):
     mbResetRequested(false), mbResetActiveMapRequested(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas),
     mpKeyFrameDB(pDB), mpORBVocabulary(pVoc), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
-    mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), mnFullBAIdx(0), mnLoopNumCoincidences(0), mnMergeNumCoincidences(0),
+    mbStopGBA(false), mbFixScale(bFixScale), mnLoopNumCoincidences(0), mnMergeNumCoincidences(0),
     mbLoopDetected(false), mbMergeDetected(false), mnLoopNumNotFound(0), mnMergeNumNotFound(0), mbActiveLC(bActiveLC)
 {
     mnCovisibilityConsistencyTh = 3;
@@ -86,228 +98,356 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
     mpLocalMapper=pLocalMapper;
 }
 
+void LoopClosing::SetTagLoopParams(const tag::TagLoopParams &params)
+{
+    mTagLoopParams = params;
+    if(mTagLoopParams.enable)
+    {
+        std::cout << "Tag Loop enabled"
+                  << " (min_history_obs=" << mTagLoopParams.min_history_observations
+                  << ", min_kf_gap=" << mTagLoopParams.min_keyframe_gap
+                  << ", min_reobs_gap=" << mTagLoopParams.min_reobservation_gap_kfs
+                  << ", min_hist_mps=" << mTagLoopParams.min_historical_kf_map_points
+                  << ", min_consistent_tags=" << mTagLoopParams.min_consistent_tags
+                  << ", ref_timeout_kfs=" << mTagLoopParams.reference_timeout_kfs
+                  << ")" << std::endl;
+    }
+}
+
+void LoopClosing::SetTagLocalBAParams(const tag::TagLocalBAParams &params)
+{
+    mTagLocalBAParams = params;
+}
+
+void LoopClosing::ResetTagLoopState()
+{
+    if(mpTagLoopMatchedKF && mpTagLoopMatchedKF != mpCurrentKF)
+        mpTagLoopMatchedKF->SetErase();
+    mbTagLoopDetected = false;
+    mnLoopTagId = -1;
+    mpLoopTag = nullptr;
+    mpTagLoopMatchedKF = nullptr;
+    mnTagLoopCoincidences = 0;
+    mnTagLoopNotFound = 0;
+    mpTagLoopLastCurrentKF = nullptr;
+}
+
+void LoopClosing::ReleaseTagLoopHistoricalKF(KeyFrame *pKF)
+{
+    if(!pKF || pKF == mpCurrentKF)
+        return;
+    if(pKF == mpTagLoopMatchedKF || pKF == mpLoopMatchedKF)
+        return;
+    for(const auto &kv : mTagLoopReferences)
+    {
+        if(kv.second.pHistoricalKF == pKF)
+            return;
+    }
+    pKF->SetErase();
+}
+
+void LoopClosing::EraseTagLoopReference(int tagId, const char *reason)
+{
+    const auto it = mTagLoopReferences.find(tagId);
+    if(it == mTagLoopReferences.end())
+        return;
+    KeyFrame *pKF = it->second.pHistoricalKF;
+    const unsigned long lastSeen = it->second.lastSeenKF;
+    mTagLoopReferences.erase(it);
+    std::cout << "[TagLoopRef] KF=" << (mpCurrentKF ? mpCurrentKF->mnId : 0)
+              << " tag=" << tagId
+              << " action=erase reason=" << (reason ? reason : "unknown")
+              << " lastSeen=" << lastSeen
+              << " histKF=" << (pKF ? pKF->mnId : 0)
+              << std::endl;
+    ReleaseTagLoopHistoricalKF(pKF);
+}
+
+void LoopClosing::ClearTagLoopReferences(const char *reason)
+{
+    if(mTagLoopReferences.empty())
+        return;
+    std::cout << "[TagLoopRef] KF=" << (mpCurrentKF ? mpCurrentKF->mnId : 0)
+              << " action=clear_all reason=" << (reason ? reason : "unknown")
+              << " n=" << mTagLoopReferences.size() << std::endl;
+    std::vector<KeyFrame*> kfs;
+    kfs.reserve(mTagLoopReferences.size());
+    for(const auto &kv : mTagLoopReferences)
+    {
+        if(kv.second.pHistoricalKF)
+            kfs.push_back(kv.second.pHistoricalKF);
+    }
+    mTagLoopReferences.clear();
+    for(KeyFrame *pKF : kfs)
+        ReleaseTagLoopHistoricalKF(pKF);
+}
+
+void LoopClosing::PruneTagLoopReferences()
+{
+    if(!mpCurrentKF)
+        return;
+    const unsigned long curId = mpCurrentKF->mnId;
+    const unsigned long timeout =
+        static_cast<unsigned long>(std::max(1, mTagLoopParams.reference_timeout_kfs));
+    std::vector<int> expired;
+    for(const auto &kv : mTagLoopReferences)
+    {
+        const TagLoopReference &ref = kv.second;
+        if(!ref.pHistoricalKF || ref.pHistoricalKF->isBad() ||
+           ref.pHistoricalKF->GetMap() != mpCurrentKF->GetMap() ||
+           curId >= ref.lastSeenKF + timeout)
+            expired.push_back(kv.first);
+    }
+    for(int tagId : expired)
+    {
+        const auto it = mTagLoopReferences.find(tagId);
+        const char *reason = "timeout";
+        if(it != mTagLoopReferences.end() &&
+           (!it->second.pHistoricalKF || it->second.pHistoricalKF->isBad() ||
+            it->second.pHistoricalKF->GetMap() != mpCurrentKF->GetMap()))
+            reason = "hist_kf_invalid";
+        EraseTagLoopReference(tagId, reason);
+    }
+}
+
 
 void LoopClosing::Run()
 {
-    mbFinished =false;
+    // Offline architecture: processing is driven by ProcessUntilIdle() from Track*().
+    mbFinished = true;
+}
 
-    while(1)
+bool LoopClosing::HasPendingKeyFrames()
+{
+    unique_lock<mutex> lock(mMutexLoopQueue);
+    return(!mlpLoopKeyFrameQueue.empty());
+}
+
+void LoopClosing::ProcessUntilIdle()
+{
+    while(ProcessOneKeyFrame())
     {
+    }
+    ResetIfRequested();
+}
 
-        //NEW LOOP AND MERGE DETECTION ALGORITHM
-        //----------------------------
+bool LoopClosing::ProcessOneKeyFrame()
+{
+    if(!CheckNewKeyFrames())
+        return false;
 
+    if(mpLastCurrentKF)
+    {
+        mpLastCurrentKF->mvpLoopCandKFs.clear();
+        mpLastCurrentKF->mvpMergeCandKFs.clear();
+    }
+#ifdef REGISTER_TIMES
+    std::chrono::steady_clock::time_point time_StartPR = std::chrono::steady_clock::now();
+#endif
 
-        if(CheckNewKeyFrames())
+    bool bFindedRegion = NewDetectCommonRegions();
+
+#ifdef REGISTER_TIMES
+    std::chrono::steady_clock::time_point time_EndPR = std::chrono::steady_clock::now();
+
+    double timePRTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndPR - time_StartPR).count();
+    vdPRTotal_ms.push_back(timePRTotal);
+#endif
+
+    std::cout << "[KF " << mpCurrentKF->mnId << "] LoopClosing begin" << std::endl;
+
+    if(bFindedRegion)
+    {
+        if(mbMergeDetected)
         {
-            if(mpLastCurrentKF)
+            if ((mpTracker->mSensor==System::IMU_MONOCULAR || mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
+                (!mpCurrentKF->GetMap()->isImuInitialized()))
             {
-                mpLastCurrentKF->mvpLoopCandKFs.clear();
-                mpLastCurrentKF->mvpMergeCandKFs.clear();
+                cout << "IMU is not initilized, merge is aborted" << endl;
             }
-#ifdef REGISTER_TIMES
-            std::chrono::steady_clock::time_point time_StartPR = std::chrono::steady_clock::now();
-#endif
-
-            bool bFindedRegion = NewDetectCommonRegions();
-
-#ifdef REGISTER_TIMES
-            std::chrono::steady_clock::time_point time_EndPR = std::chrono::steady_clock::now();
-
-            double timePRTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndPR - time_StartPR).count();
-            vdPRTotal_ms.push_back(timePRTotal);
-#endif
-            if(bFindedRegion)
+            else
             {
-                // 不同地图的融合（多个Map，前端丢失连续track）
-                if(mbMergeDetected)
+                Sophus::SE3d mTmw = mpMergeMatchedKF->GetPose().cast<double>();
+                g2o::Sim3 gSmw2(mTmw.unit_quaternion(), mTmw.translation(), 1.0);
+                Sophus::SE3d mTcw = mpCurrentKF->GetPose().cast<double>();
+                g2o::Sim3 gScw1(mTcw.unit_quaternion(), mTcw.translation(), 1.0);
+                g2o::Sim3 gSw2c = mg2oMergeSlw.inverse();
+                g2o::Sim3 gSw1m = mg2oMergeSlw;
+
+                mSold_new = (gSw2c * gScw1);
+
+
+                if(mpCurrentKF->GetMap()->IsInertial() && mpMergeMatchedKF->GetMap()->IsInertial())
                 {
+                    cout << "Merge check transformation with IMU" << endl;
+                    if(mSold_new.scale()<0.90||mSold_new.scale()>1.1){
+                        mpMergeLastCurrentKF->SetErase();
+                        mpMergeMatchedKF->SetErase();
+                        mpMergeLastCurrentKF = nullptr;
+                        mpMergeMatchedKF = nullptr;
+                        mnMergeNumCoincidences = 0;
+                        mvpMergeMatchedMPs.clear();
+                        mvpMergeMPs.clear();
+                        mnMergeNumNotFound = 0;
+                        mbMergeDetected = false;
+                        Verbose::PrintMess("scale bad estimated. Abort merging", Verbose::VERBOSITY_NORMAL);
+                        std::cout << "[KF " << mpCurrentKF->mnId << "] No loop" << std::endl;
+                        return true;
+                    }
                     if ((mpTracker->mSensor==System::IMU_MONOCULAR || mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
-                        (!mpCurrentKF->GetMap()->isImuInitialized()))
+                           mpCurrentKF->GetMap()->GetIniertialBA1())
                     {
-                        cout << "IMU is not initilized, merge is aborted" << endl;
+                        Eigen::Vector3d phi = LogSO3(mSold_new.rotation().toRotationMatrix());
+                        phi(0)=0;
+                        phi(1)=0;
+                        mSold_new = g2o::Sim3(ExpSO3(phi),mSold_new.translation(),1.0);
                     }
-                    else
-                    {
-                        Sophus::SE3d mTmw = mpMergeMatchedKF->GetPose().cast<double>();
-                        g2o::Sim3 gSmw2(mTmw.unit_quaternion(), mTmw.translation(), 1.0);
-                        Sophus::SE3d mTcw = mpCurrentKF->GetPose().cast<double>();
-                        g2o::Sim3 gScw1(mTcw.unit_quaternion(), mTcw.translation(), 1.0);
-                        g2o::Sim3 gSw2c = mg2oMergeSlw.inverse();
-                        g2o::Sim3 gSw1m = mg2oMergeSlw;
-
-                        mSold_new = (gSw2c * gScw1);
-
-
-                        if(mpCurrentKF->GetMap()->IsInertial() && mpMergeMatchedKF->GetMap()->IsInertial())
-                        {
-                            cout << "Merge check transformation with IMU" << endl;
-                            if(mSold_new.scale()<0.90||mSold_new.scale()>1.1){
-                                mpMergeLastCurrentKF->SetErase();
-                                mpMergeMatchedKF->SetErase();
-                                mnMergeNumCoincidences = 0;
-                                mvpMergeMatchedMPs.clear();
-                                mvpMergeMPs.clear();
-                                mnMergeNumNotFound = 0;
-                                mbMergeDetected = false;
-                                Verbose::PrintMess("scale bad estimated. Abort merging", Verbose::VERBOSITY_NORMAL);
-                                continue;
-                            }
-                            // If inertial, force only yaw
-                            if ((mpTracker->mSensor==System::IMU_MONOCULAR || mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
-                                   mpCurrentKF->GetMap()->GetIniertialBA1())
-                            {
-                                Eigen::Vector3d phi = LogSO3(mSold_new.rotation().toRotationMatrix());
-                                phi(0)=0;
-                                phi(1)=0;
-                                mSold_new = g2o::Sim3(ExpSO3(phi),mSold_new.translation(),1.0);
-                            }
-                        }
-
-                        mg2oMergeSmw = gSmw2 * gSw2c * gScw1;
-
-                        mg2oMergeScw = mg2oMergeSlw;
-
-                        //mpTracker->SetStepByStep(true);
-
-                        Verbose::PrintMess("*Merge detected", Verbose::VERBOSITY_QUIET);
-
-#ifdef REGISTER_TIMES
-                        std::chrono::steady_clock::time_point time_StartMerge = std::chrono::steady_clock::now();
-
-                        nMerges += 1;
-#endif
-                        // TODO UNCOMMENT
-                        if (mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD)
-                            MergeLocal2();
-                        else
-                            MergeLocal();
-
-#ifdef REGISTER_TIMES
-                        std::chrono::steady_clock::time_point time_EndMerge = std::chrono::steady_clock::now();
-
-                        double timeMergeTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndMerge - time_StartMerge).count();
-                        vdMergeTotal_ms.push_back(timeMergeTotal);
-#endif
-
-                        Verbose::PrintMess("Merge finished!", Verbose::VERBOSITY_QUIET);
-                    }
-
-                    vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
-                    vdPR_MatchedTime.push_back(mpMergeMatchedKF->mTimeStamp);
-                    vnPR_TypeRecogn.push_back(1);
-
-                    // Reset all variables
-                    mpMergeLastCurrentKF->SetErase();
-                    mpMergeMatchedKF->SetErase();
-                    mnMergeNumCoincidences = 0;
-                    mvpMergeMatchedMPs.clear();
-                    mvpMergeMPs.clear();
-                    mnMergeNumNotFound = 0;
-                    mbMergeDetected = false;
-
-                    if(mbLoopDetected)
-                    {
-                        // Reset Loop variables
-                        mpLoopLastCurrentKF->SetErase();
-                        mpLoopMatchedKF->SetErase();
-                        mnLoopNumCoincidences = 0;
-                        mvpLoopMatchedMPs.clear();
-                        mvpLoopMPs.clear();
-                        mnLoopNumNotFound = 0;
-                        mbLoopDetected = false;
-                    }
-
                 }
 
-                // 同一地图的闭环检测（单个Map）
-                if(mbLoopDetected)
+                mg2oMergeSmw = gSmw2 * gSw2c * gScw1;
+
+                mg2oMergeScw = mg2oMergeSlw;
+
+                Verbose::PrintMess("*Merge detected", Verbose::VERBOSITY_QUIET);
+                std::cout << "[KF " << mpCurrentKF->mnId << "] Merge confirmed" << std::endl;
+
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_StartMerge = std::chrono::steady_clock::now();
+
+                nMerges += 1;
+#endif
+                if (mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD)
+                    MergeLocal2();
+                else
+                    MergeLocal();
+
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_EndMerge = std::chrono::steady_clock::now();
+
+                double timeMergeTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndMerge - time_StartMerge).count();
+                vdMergeTotal_ms.push_back(timeMergeTotal);
+#endif
+
+                Verbose::PrintMess("Merge finished!", Verbose::VERBOSITY_QUIET);
+            }
+
+            vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
+            vdPR_MatchedTime.push_back(mpMergeMatchedKF->mTimeStamp);
+            vnPR_TypeRecogn.push_back(1);
+
+            mpMergeLastCurrentKF->SetErase();
+            mpMergeMatchedKF->SetErase();
+            mpMergeLastCurrentKF = nullptr;
+            mpMergeMatchedKF = nullptr;
+            mnMergeNumCoincidences = 0;
+            mvpMergeMatchedMPs.clear();
+            mvpMergeMPs.clear();
+            mnMergeNumNotFound = 0;
+            mbMergeDetected = false;
+            ClearTagLoopReferences("merge");
+
+            if(mbLoopDetected)
+            {
+                mpLoopLastCurrentKF->SetErase();
+                mpLoopMatchedKF->SetErase();
+                mpLoopLastCurrentKF = nullptr;
+                mpLoopMatchedKF = nullptr;
+                mnLoopNumCoincidences = 0;
+                mvpLoopMatchedMPs.clear();
+                mvpLoopMPs.clear();
+                mnLoopNumNotFound = 0;
+                mbLoopDetected = false;
+                ResetTagLoopState();
+            }
+
+        }
+
+        if(mbLoopDetected)
+        {
+            bool bGoodLoop = true;
+            vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
+            vdPR_MatchedTime.push_back(mpLoopMatchedKF->mTimeStamp);
+            vnPR_TypeRecogn.push_back(0);
+
+            Verbose::PrintMess("*Loop detected", Verbose::VERBOSITY_QUIET);
+
+            mg2oLoopScw = mg2oLoopSlw;
+            // Tag使用不同的门控阈值
+            if(!mbTagLoopDetected && mpCurrentKF->GetMap()->IsInertial())
+            {
+                Sophus::SE3d Twc = mpCurrentKF->GetPoseInverse().cast<double>();
+                g2o::Sim3 g2oTwc(Twc.unit_quaternion(),Twc.translation(),1.0);
+                g2o::Sim3 g2oSww_new = g2oTwc*mg2oLoopScw;
+
+                Eigen::Vector3d phi = LogSO3(g2oSww_new.rotation().toRotationMatrix());
+                cout << "phi = " << phi.transpose() << endl;
+                if (fabs(phi(0))<0.008f && fabs(phi(1))<0.008f && fabs(phi(2))<0.349f)
                 {
-                    bool bGoodLoop = true;
-                    vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
-                    vdPR_MatchedTime.push_back(mpLoopMatchedKF->mTimeStamp);
-                    vnPR_TypeRecogn.push_back(0);
-
-                    Verbose::PrintMess("*Loop detected", Verbose::VERBOSITY_QUIET);
-
-                    mg2oLoopScw = mg2oLoopSlw; //*mvg2oSim3LoopTcw[nCurrentIndex];
                     if(mpCurrentKF->GetMap()->IsInertial())
                     {
-                        Sophus::SE3d Twc = mpCurrentKF->GetPoseInverse().cast<double>();
-                        g2o::Sim3 g2oTwc(Twc.unit_quaternion(),Twc.translation(),1.0);
-                        g2o::Sim3 g2oSww_new = g2oTwc*mg2oLoopScw;
-
-                        Eigen::Vector3d phi = LogSO3(g2oSww_new.rotation().toRotationMatrix());
-                        cout << "phi = " << phi.transpose() << endl; 
-                        if (fabs(phi(0))<0.008f && fabs(phi(1))<0.008f && fabs(phi(2))<0.349f)
+                        if ((mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
+                                mpCurrentKF->GetMap()->GetIniertialBA2())
                         {
-                            if(mpCurrentKF->GetMap()->IsInertial())
-                            {
-                                // If inertial, force only yaw
-                                if ((mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO || mpTracker->mSensor==System::IMU_RGBD) &&
-                                        mpCurrentKF->GetMap()->GetIniertialBA2())
-                                {
-                                    phi(0)=0;
-                                    phi(1)=0;
-                                    g2oSww_new = g2o::Sim3(ExpSO3(phi),g2oSww_new.translation(),1.0);
-                                    mg2oLoopScw = g2oTwc.inverse()*g2oSww_new;
-                                }
-                            }
-
+                            phi(0)=0;
+                            phi(1)=0;
+                            g2oSww_new = g2o::Sim3(ExpSO3(phi),g2oSww_new.translation(),1.0);
+                            mg2oLoopScw = g2oTwc.inverse()*g2oSww_new;
                         }
-                        else
-                        {
-                            cout << "BAD LOOP!!!" << endl;
-                            bGoodLoop = false;
-                        }
-
                     }
 
-                    if (bGoodLoop) {
-
-                        mvpLoopMapPoints = mvpLoopMPs;
-
-#ifdef REGISTER_TIMES
-                        std::chrono::steady_clock::time_point time_StartLoop = std::chrono::steady_clock::now();
-
-                        nLoop += 1;
-
-#endif
-                        CorrectLoop();
-#ifdef REGISTER_TIMES
-                        std::chrono::steady_clock::time_point time_EndLoop = std::chrono::steady_clock::now();
-
-                        double timeLoopTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndLoop - time_StartLoop).count();
-                        vdLoopTotal_ms.push_back(timeLoopTotal);
-#endif
-
-                        mnNumCorrection += 1;
-                    }
-
-                    // Reset all variables
-                    mpLoopLastCurrentKF->SetErase();
-                    mpLoopMatchedKF->SetErase();
-                    mnLoopNumCoincidences = 0;
-                    mvpLoopMatchedMPs.clear();
-                    mvpLoopMPs.clear();
-                    mnLoopNumNotFound = 0;
-                    mbLoopDetected = false;
+                }
+                else
+                {
+                    cout << "BAD LOOP!!!" << endl;
+                    bGoodLoop = false;
                 }
 
             }
-            mpLastCurrentKF = mpCurrentKF;
+
+            if (bGoodLoop) {
+
+                mvpLoopMapPoints = mvpLoopMPs;
+
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_StartLoop = std::chrono::steady_clock::now();
+
+                nLoop += 1;
+
+#endif
+                CorrectLoop();
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_EndLoop = std::chrono::steady_clock::now();
+
+                double timeLoopTotal = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndLoop - time_StartLoop).count();
+                vdLoopTotal_ms.push_back(timeLoopTotal);
+#endif
+
+                mnNumCorrection += 1;
+            }
+            else
+            {
+                std::cout << "[KF " << mpCurrentKF->mnId << "] No loop" << std::endl;
+            }
+
+            mpLoopLastCurrentKF->SetErase();
+            mpLoopMatchedKF->SetErase();
+            mpLoopLastCurrentKF = nullptr;
+            mpLoopMatchedKF = nullptr;
+            mnLoopNumCoincidences = 0;
+            mvpLoopMatchedMPs.clear();
+            mvpLoopMPs.clear();
+            mnLoopNumNotFound = 0;
+            mbLoopDetected = false;
+            ResetTagLoopState();
         }
 
-        ResetIfRequested();
-
-        if(CheckFinish()){
-            break;
-        }
-
-        usleep(5000);
     }
-
-    SetFinish();
+    else
+    {
+        std::cout << "[KF " << mpCurrentKF->mnId << "] No loop" << std::endl;
+    }
+    mpLastCurrentKF = mpCurrentKF;
+    return true;
 }
 
 void LoopClosing::InsertKeyFrame(KeyFrame *pKF)
@@ -321,6 +461,1210 @@ bool LoopClosing::CheckNewKeyFrames()
 {
     unique_lock<mutex> lock(mMutexLoopQueue);
     return(!mlpLoopKeyFrameQueue.empty());
+}
+
+namespace {
+
+void TagLoopPoseDelta(const Sophus::SE3f &TcwA, const Sophus::SE3f &TcwB,
+                      float &dtrans, float &drot)
+{
+    const Sophus::SE3f dT = TcwA * TcwB.inverse();
+    dtrans = dT.translation().norm();
+    drot = dT.so3().log().norm();
+}
+
+bool TagLoopPosesConsistent(const Sophus::SE3f &TcwA, const Sophus::SE3f &TcwB,
+                            float maxTrans, float maxRot)
+{
+    float dtrans = 0.0f;
+    float drot = 0.0f;
+    TagLoopPoseDelta(TcwA, TcwB, dtrans, drot);
+    return dtrans < maxTrans && drot < maxRot;
+}
+
+void PrintSE3Compact(const Sophus::SE3f &T)
+{
+    const Eigen::Vector3f t = T.translation();
+    const Eigen::Quaternionf q = T.unit_quaternion();
+    std::cout << "t=[" << t.x() << " " << t.y() << " " << t.z() << "]"
+              << " q=[" << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << "]";
+}
+
+void PrintTagLoopPair(unsigned long kfId, int tagA, int tagB,
+                      const Sophus::SE3f &TcwA, const Sophus::SE3f &TcwB,
+                      float maxTrans, float maxRot, const char *src)
+{
+    float dtrans = 0.0f;
+    float drot = 0.0f;
+    TagLoopPoseDelta(TcwA, TcwB, dtrans, drot);
+    const int over_trans = dtrans >= maxTrans ? 1 : 0;
+    const int over_rot = drot >= maxRot ? 1 : 0;
+    std::cout << "[TagLoopPair] KF=" << kfId
+              << " tagA=" << tagA << " tagB=" << tagB
+              << " dtrans=" << dtrans << " m"
+              << " drot=" << drot << " rad"
+              << " consistent=" << ((over_trans || over_rot) ? 0 : 1)
+              << " over_trans=" << over_trans
+              << " over_rot=" << over_rot
+              << " src=" << src
+              << " TcwA ";
+    PrintSE3Compact(TcwA);
+    std::cout << " TcwB ";
+    PrintSE3Compact(TcwB);
+    std::cout << std::endl;
+}
+
+bool TagObservationUsable(const tag::TagObservation &obs)
+{
+    return obs.IsDetectValid();
+}
+
+bool TagObservationAtIndexUsable(const std::vector<tag::TagObservation> &observations, int idx)
+{
+    return idx >= 0 && idx < static_cast<int>(observations.size()) &&
+           TagObservationUsable(observations[idx]);
+}
+
+bool HistoricalTagObservationUsable(const KeyFrame *pKF,
+                                    const tag::MapTagData::KeyFrameObservation &obs)
+{
+    if(!pKF)
+        return false;
+    return TagObservationAtIndexUsable(pKF->mTagFrameData.left, obs.leftIndex) ||
+           TagObservationAtIndexUsable(pKF->mTagFrameData.right, obs.rightIndex);
+}
+
+bool CurrentTagObservationUsable(const KeyFrame *pKF,
+                                 const KeyFrame::MapTagAssociation &assoc)
+{
+    if(!pKF)
+        return false;
+    return TagObservationAtIndexUsable(pKF->mTagFrameData.left, assoc.leftObservationIndex) ||
+           TagObservationAtIndexUsable(pKF->mTagFrameData.right, assoc.rightObservationIndex);
+}
+
+float SelectedReprojectionError(const tag::TagObservation *obs)
+{
+    if(!obs || !obs->IsAmbiguityResolved() || !obs->pose_estimate)
+        return -1.0f;
+    const tag::TagPoseCandidate *sel = obs->pose_estimate->Selected();
+    if(!sel)
+        return -1.0f;
+    return sel->reprojection_error;
+}
+
+float CurrentTagReprojectionError(const KeyFrame *pKF,
+                                  const KeyFrame::MapTagAssociation &assoc)
+{
+    if(!pKF)
+        return 1e9f;
+    float eL = -1.0f;
+    float eR = -1.0f;
+    if(assoc.leftObservationIndex >= 0 &&
+       assoc.leftObservationIndex < static_cast<int>(pKF->mTagFrameData.left.size()))
+        eL = SelectedReprojectionError(&pKF->mTagFrameData.left[assoc.leftObservationIndex]);
+    if(assoc.rightObservationIndex >= 0 &&
+       assoc.rightObservationIndex < static_cast<int>(pKF->mTagFrameData.right.size()))
+        eR = SelectedReprojectionError(&pKF->mTagFrameData.right[assoc.rightObservationIndex]);
+    if(eL >= 0.0f && eR >= 0.0f)
+        return 0.5f * (eL + eR);
+    if(eL >= 0.0f)
+        return eL;
+    if(eR >= 0.0f)
+        return eR;
+    return 1e9f;
+}
+
+std::string TagIppeFailReason(const tag::TagObservation *obs, int idx, float maxReproj)
+{
+    if(idx < 0)
+        return "no_idx";
+    if(!obs)
+        return "no_obs";
+    if(!obs->IsDetectValid())
+        return "detect_invalid";
+    if(!obs->pose_estimate)
+        return "no_ippe";
+    if(!obs->IsAmbiguityResolved())
+        return "unresolved";
+    const tag::TagPoseCandidate *sel = obs->pose_estimate->Selected();
+    if(!sel)
+        return "no_selected";
+    if(sel->reprojection_error < 0.0f || sel->reprojection_error > maxReproj)
+        return "reproj";
+    return "ok";
+}
+
+struct TagIppeCamDiag
+{
+    int idx = -1;
+    std::string status = "no_idx";
+    int selected = -1;
+    float reproj = -1.0f;
+    float cand0_e = -1.0f;
+    float cand1_e = -1.0f;
+    int cand0_v = 0;
+    int cand1_v = 0;
+    float amb_ratio = -1.0f;
+    bool usable = false;
+    bool hasTcw = false;
+    Sophus::SE3f Tcw;
+    Sophus::SE3f Tct;
+};
+
+void FillTagIppeCamDiag(TagIppeCamDiag &d, const tag::TagObservation *obs, int idx,
+                        float maxReproj, const Sophus::SE3f &Tlr,
+                        const Sophus::SE3f &historicalTwt)
+{
+    d.idx = idx;
+    d.status = TagIppeFailReason(obs, idx, maxReproj);
+    if(!obs || !obs->pose_estimate)
+        return;
+
+    const tag::TagPoseEstimate &est = *obs->pose_estimate;
+    d.selected = est.selected_candidate;
+    d.amb_ratio = est.ambiguity_ratio;
+    d.cand0_e = est.candidates[0].reprojection_error;
+    d.cand1_e = est.candidates[1].reprojection_error;
+    d.cand0_v = est.candidates[0].valid ? 1 : 0;
+    d.cand1_v = est.candidates[1].valid ? 1 : 0;
+
+    const tag::TagPoseCandidate *sel = est.Selected();
+    if(!sel && d.selected >= 0 && d.selected < 2 &&
+       est.candidates[static_cast<size_t>(d.selected)].valid)
+        sel = &est.candidates[static_cast<size_t>(d.selected)];
+    if(sel)
+        d.reproj = sel->reprojection_error;
+
+    // 只要有已选定的 IPPE 解，就算出 Tcw 供诊断；是否用于回环仍看 status==ok。
+    if(!est.Selected())
+        return;
+    d.Tct = tag::ExpressTagPoseInLeftCamera(obs->camera_id, est.Selected()->T_ct, Tlr);
+    d.Tcw = d.Tct * historicalTwt.inverse();
+    d.hasTcw = true;
+    d.usable = (d.status == "ok");
+}
+
+void PrintTagIppeCam(unsigned long kfId, int tagId, char cam, const TagIppeCamDiag &d,
+                     float maxReproj)
+{
+    std::cout << "[TagLoopIppe] KF=" << kfId
+              << " tag=" << tagId
+              << " cam=" << cam
+              << " idx=" << d.idx
+              << " status=" << d.status
+              << " sel=" << d.selected
+              << " reproj=" << d.reproj
+              << " thr=" << maxReproj
+              << " cand0_e=" << d.cand0_e << " cand0_v=" << d.cand0_v
+              << " cand1_e=" << d.cand1_e << " cand1_v=" << d.cand1_v
+              << " amb_ratio=" << d.amb_ratio
+              << " usable=" << (d.usable ? 1 : 0);
+    if(d.hasTcw)
+    {
+        std::cout << " Tcw ";
+        PrintSE3Compact(d.Tcw);
+        std::cout << " Tct ";
+        PrintSE3Compact(d.Tct);
+    }
+    std::cout << std::endl;
+}
+
+void PrintTagIppeStereo(unsigned long kfId, int tagId,
+                        const TagIppeCamDiag &L, const TagIppeCamDiag &R,
+                        float maxT, float maxR,
+                        bool success, const char *resultReason,
+                        const char *chosen, const Sophus::SE3f *TcwTag)
+{
+    std::cout << "[TagLoopIppe] KF=" << kfId
+              << " tag=" << tagId
+              << " stereo"
+              << " hasL=" << (L.usable ? 1 : 0)
+              << " hasR=" << (R.usable ? 1 : 0)
+              << " L=" << L.status
+              << " R=" << R.status
+              << " selL=" << L.selected
+              << " selR=" << R.selected
+              << " reprojL=" << L.reproj
+              << " reprojR=" << R.reproj;
+
+    const bool bothTcw = L.hasTcw && R.hasTcw;
+    float dtrans = -1.0f;
+    float drot = -1.0f;
+    int over_trans = 0;
+    int over_rot = 0;
+    int consistent = -1;
+    if(bothTcw)
+    {
+        TagLoopPoseDelta(L.Tcw, R.Tcw, dtrans, drot);
+        over_trans = dtrans >= maxT ? 1 : 0;
+        over_rot = drot >= maxR ? 1 : 0;
+        consistent = (over_trans || over_rot) ? 0 : 1;
+        std::cout << " dtrans=" << dtrans << " m"
+                  << " drot=" << drot << " rad"
+                  << " maxT=" << maxT << " m"
+                  << " maxR=" << maxR << " rad"
+                  << " consistent=" << consistent
+                  << " over_trans=" << over_trans
+                  << " over_rot=" << over_rot
+                  << " gate=" << ((L.usable && R.usable) ? 1 : 0);
+        std::cout << " TcwL ";
+        PrintSE3Compact(L.Tcw);
+        std::cout << " TcwR ";
+        PrintSE3Compact(R.Tcw);
+    }
+    else
+    {
+        std::cout << " dtrans=n/a drot=n/a consistent=n/a"
+                  << " other_fail=" << (L.usable ? R.status : (R.usable ? L.status : "both"));
+    }
+
+    std::cout << " result=" << (success ? "ok" : "fail")
+              << " reason=" << resultReason
+              << " chosen=" << chosen;
+    if(TcwTag)
+    {
+        std::cout << " TcwTag ";
+        PrintSE3Compact(*TcwTag);
+    }
+    std::cout << std::endl;
+}
+
+}  // namespace
+
+bool LoopClosing::EstimateTagLoopPose(const KeyFrame::MapTagAssociation &assoc,
+                                      const Sophus::SE3f &historicalTwt,
+                                      Sophus::SE3f &TcwTag, Sophus::SE3f &TctLeft,
+                                      bool &bStereoConsistent, int &nValidCameras,
+                                      std::string *failReason)
+{
+    bStereoConsistent = false;
+    nValidCameras = 0;
+    auto setFail = [&](const char *msg) {
+        if(failReason)
+            *failReason = msg;
+        return false;
+    };
+    if(!assoc.pMapTag)
+        return setFail("no_historical_pose");
+
+    const int tagId = assoc.pMapTag->Id();
+    const float maxReproj = mTagLoopParams.max_ippe_reprojection_error;
+    const float maxT = mTagLoopParams.max_stereo_translation_error;
+    const float maxR = mTagLoopParams.max_stereo_rotation_error;
+    const Sophus::SE3f Tlr = mpCurrentKF->GetRelativePoseTlr();
+
+    const tag::TagObservation *obsL = nullptr;
+    const tag::TagObservation *obsR = nullptr;
+    if(assoc.leftObservationIndex >= 0 &&
+       assoc.leftObservationIndex < static_cast<int>(mpCurrentKF->mTagFrameData.left.size()))
+        obsL = &mpCurrentKF->mTagFrameData.left[assoc.leftObservationIndex];
+    if(assoc.rightObservationIndex >= 0 &&
+       assoc.rightObservationIndex < static_cast<int>(mpCurrentKF->mTagFrameData.right.size()))
+        obsR = &mpCurrentKF->mTagFrameData.right[assoc.rightObservationIndex];
+
+    TagIppeCamDiag L, R;
+    FillTagIppeCamDiag(L, obsL, assoc.leftObservationIndex, maxReproj, Tlr, historicalTwt);
+    FillTagIppeCamDiag(R, obsR, assoc.rightObservationIndex, maxReproj, Tlr, historicalTwt);
+    PrintTagIppeCam(mpCurrentKF->mnId, tagId, 'L', L, maxReproj);
+    PrintTagIppeCam(mpCurrentKF->mnId, tagId, 'R', R, maxReproj);
+
+    auto dumpStereo = [&](bool success, const char *reason, const char *chosen,
+                          const Sophus::SE3f *pTcw) {
+        PrintTagIppeStereo(mpCurrentKF->mnId, tagId, L, R, maxT, maxR,
+                           success, reason, chosen, pTcw);
+    };
+
+    // 检查双目Tag计算当前T_wc相机pose是否一致
+    if(L.usable && R.usable)
+    {
+        float dtrans = 0.0f;
+        float drot = 0.0f;
+        TagLoopPoseDelta(L.Tcw, R.Tcw, dtrans, drot);
+        const int over_trans = dtrans >= maxT ? 1 : 0;
+        const int over_rot = drot >= maxR ? 1 : 0;
+        if(over_trans || over_rot)
+        {
+            std::ostringstream oss;
+            oss << "stereo_inconsistent dtrans=" << dtrans << " m drot=" << drot
+                << " rad maxT=" << maxT << " maxR=" << maxR
+                << " over_trans=" << over_trans << " over_rot=" << over_rot;
+            dumpStereo(false, oss.str().c_str(), "none", nullptr);
+            return setFail(oss.str().c_str());
+        }
+        TcwTag = L.Tcw;
+        TctLeft = L.Tct;
+        bStereoConsistent = true;
+        nValidCameras = 2;
+        dumpStereo(true, "stereo_ok", "L", &TcwTag);
+        return true;
+    }
+    if(L.usable)
+    {
+        TcwTag = L.Tcw;
+        TctLeft = L.Tct;
+        nValidCameras = 1;
+        dumpStereo(true, "mono_L", "L", &TcwTag);
+        return true;
+    }
+    if(R.usable)
+    {
+        TcwTag = R.Tcw;
+        TctLeft = R.Tct;
+        nValidCameras = 1;
+        dumpStereo(true, "mono_R", "R", &TcwTag);
+        return true;
+    }
+
+    std::ostringstream oss;
+    oss << "no_valid_ippe L=" << L.status
+        << " selL=" << L.selected << " reprojL=" << L.reproj
+        << " cand0L=" << L.cand0_e << " cand1L=" << L.cand1_e
+        << " R=" << R.status
+        << " selR=" << R.selected << " reprojR=" << R.reproj
+        << " cand0R=" << R.cand0_e << " cand1R=" << R.cand1_e;
+    dumpStereo(false, oss.str().c_str(), "none", nullptr);
+    return setFail(oss.str().c_str());
+}
+
+bool LoopClosing::ValidateTagLoop(const g2o::Sim3 &gScwTag, g2o::Sim3 &gScwTag4DoF)
+{
+    gScwTag4DoF = gScwTag;
+    Map *pMap = mpCurrentKF->GetMap();
+    if(!pMap || !pMap->IsInertial())
+        return true;
+
+    const Sophus::SE3d Twc = mpCurrentKF->GetPoseInverse().cast<double>();
+    const g2o::Sim3 gTwcOrb(Twc.unit_quaternion(), Twc.translation(), 1.0);
+    g2o::Sim3 gSwwCorrection = gTwcOrb * gScwTag;
+    Eigen::Vector3d phi = LogSO3(gSwwCorrection.rotation().toRotationMatrix());
+
+    if(std::abs(phi(0)) > mTagLoopParams.max_roll_pitch_correction ||
+       std::abs(phi(1)) > mTagLoopParams.max_roll_pitch_correction ||
+       std::abs(phi(2)) > mTagLoopParams.max_yaw_correction)
+    {
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " reject 4DoF phi=" << phi.transpose() << std::endl;
+        return false;
+    }
+
+    if(pMap->GetIniertialBA2())
+    {
+        phi(0) = 0.0;
+        phi(1) = 0.0;
+        gSwwCorrection = g2o::Sim3(ExpSO3(phi), gSwwCorrection.translation(), 1.0);
+        gScwTag4DoF = gTwcOrb.inverse() * gSwwCorrection;
+    }
+    return true;
+}
+
+void LoopClosing::CollectTagLoopMapPoints(KeyFrame *pMatchedKF, std::vector<MapPoint*> &vpMPs)
+{
+    vpMPs.clear();
+    if(!pMatchedKF)
+        return;
+
+    std::unordered_set<MapPoint*> spMPs;
+    auto addKF = [&](KeyFrame *pKF) {
+        if(!pKF || pKF->isBad())
+            return;
+        const std::vector<MapPoint*> matches = pKF->GetMapPointMatches();
+        for(MapPoint *pMP : matches)
+        {
+            if(pMP && !pMP->isBad())
+                spMPs.insert(pMP);
+        }
+    };
+
+    addKF(pMatchedKF);
+    const std::vector<KeyFrame*> vpCov = pMatchedKF->GetBestCovisibilityKeyFrames(10);
+    for(KeyFrame *pKF : vpCov)
+        addKF(pKF);
+
+    vpMPs.assign(spMPs.begin(), spMPs.end());
+}
+
+std::vector<tag::TagPoseConstraint> LoopClosing::BuildTagLoopPoseConstraints(KeyFrame *pKF)
+{
+    // 回环专用快照：角点来自冻结/历史 T_wt，避免 BuildTagMapSnapshot 读到 LBA 后的实时 MapTag 位姿。
+    std::vector<tag::TagPoseConstraint> out;
+    if(!pKF)
+        return out;
+
+    const auto associations = pKF->GetMapTagAssociations();
+    out.reserve(associations.size());
+
+    for(const auto &kv : associations)
+    {
+        const KeyFrame::MapTagAssociation &assoc = kv.second;
+        tag::MapTagData *pTag = assoc.pMapTag;
+        if(!pTag || pTag->IsBad())
+            continue;
+
+        const tag::MapTagState state = pTag->GetState();
+        if(state != tag::MapTagState::ACTIVE && state != tag::MapTagState::FIXED_ANCHOR)
+            continue;
+        // 左右目至少有一个有效二维角点即可，不要求 IPPE / reobservation_gap
+        if(!CurrentTagObservationUsable(pKF, assoc))
+            continue;
+        if(!assoc.hasHistoricalTagPose)
+            continue;
+
+        const float tagSize = pTag->GetTagSize();
+        if(tagSize <= 0.0f)
+            continue;
+
+        // 已冻结的回环参考优先；否则用关联时拷下的 historicalTagPose
+        Sophus::SE3f historicalTwt = assoc.historicalTagPose;
+        const auto itRef = mTagLoopReferences.find(pTag->Id());
+        if(itRef != mTagLoopReferences.end())
+            historicalTwt = itRef->second.frozenTwt;
+
+        // 与 OpenCV IPPE_SQUARE / MapTagData::CornersFromPose 角点顺序一致
+        const float h = 0.5f * tagSize;
+        const Eigen::Vector3f Xt[4] = {
+            Eigen::Vector3f(-h,  h, 0.f),
+            Eigen::Vector3f( h,  h, 0.f),
+            Eigen::Vector3f( h, -h, 0.f),
+            Eigen::Vector3f(-h, -h, 0.f)};
+
+        tag::TagPoseConstraint c;
+        c.tagId = pTag->Id();
+        for(int k = 0; k < 4; ++k)
+            c.worldCorners[k] = (historicalTwt * Xt[k]).cast<double>();
+        out.push_back(c);
+    }
+
+    return out;
+}
+
+bool LoopClosing::DetectTagLoop()
+{
+    if(!mTagLoopParams.enable || !mpCurrentKF)
+        return false;
+
+    PruneTagLoopReferences();
+
+    const auto associations = mpCurrentKF->GetMapTagAssociations();
+    if(associations.empty())
+    {
+        if(mnTagLoopCoincidences > 0)
+        {
+            mnTagLoopNotFound++;
+            if(mnTagLoopNotFound >= 2)
+                ResetTagLoopState();
+        }
+        return false;
+    }
+
+    // 获取一级共视关键帧局部地图
+    std::set<KeyFrame*> localKFs;
+    localKFs.insert(mpCurrentKF);
+    const std::vector<KeyFrame*> vpCov = mpCurrentKF->GetVectorCovisibleKeyFrames();
+    for(KeyFrame *pKF : vpCov)
+        localKFs.insert(pKF);
+
+    Map *pMap = mpCurrentKF->GetMap();
+
+    struct TagLoopEstimate
+    {
+        tag::MapTagData *pTag = nullptr;
+        KeyFrame *pMatchedKF = nullptr;
+        Sophus::SE3f historicalTwt;
+        Sophus::SE3f Tct;
+        Sophus::SE3f TcwTag;
+        bool stereoConsistent = false;
+        int nValidCameras = 0;
+        float currentReproj = 1e9f;
+        bool frozen = false;
+        bool inLocalMap = false;
+    };
+    std::vector<TagLoopEstimate> estimates;
+    std::map<std::string, int> skipCounts;
+
+    auto skipTag = [&](int tagId, const std::string &reason, const std::string &extra = {}) {
+        skipCounts[reason]++;
+        if(mTagLoopParams.verbose)
+        {
+            std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                      << " skip tag=" << tagId
+                      << " reason=" << reason;
+            if(!extra.empty())
+                std::cout << " " << extra;
+            std::cout << std::endl;
+        }
+    };
+
+    auto printSkipSummary = [&]() {
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " skip_summary assoc=" << associations.size()
+                  << " estimates=" << estimates.size()
+                  << " frozen_refs=" << mTagLoopReferences.size();
+        for(const auto &kv : skipCounts)
+            std::cout << " " << kv.first << "=" << kv.second;
+        std::cout << std::endl;
+    };
+
+    auto logLiveDelta = [&](const Sophus::SE3f &frozenTwt, tag::MapTagData *pTag) {
+        if(!pTag || !pTag->HasPose())
+            return;
+        float dtrans = 0.0f;
+        float drot = 0.0f;
+        TagLoopPoseDelta(frozenTwt, pTag->GetPose(), dtrans, drot);
+        std::cout << " dtrans_live=" << dtrans
+                  << " dang_live=" << drot;
+    };
+
+    auto findLastObservedKF = [&](tag::MapTagData *pTag) -> KeyFrame* {
+        KeyFrame *pLastObservedKF = nullptr;
+        const auto observations = pTag->GetObservations();
+        for(const auto &obsKF : observations)
+        {
+            KeyFrame *pKF = obsKF.first;
+            if(!pKF || pKF == mpCurrentKF || pKF->isBad())
+                continue;
+            if(pKF->GetMap() != pMap)
+                continue;
+            if(pKF->mnId >= mpCurrentKF->mnId)
+                continue;
+            if(!HistoricalTagObservationUsable(pKF, obsKF.second))
+                continue;
+            if(!pLastObservedKF || pKF->mnId > pLastObservedKF->mnId)
+                pLastObservedKF = pKF;
+        }
+        return pLastObservedKF;
+    };
+
+    auto selectEarliestHistKF = [&](tag::MapTagData *pTag, std::string &rejectExtra) -> KeyFrame* {
+        std::vector<KeyFrame*> candidates;
+        int nLocal = 0, nGap = 0, nMps = 0, nUnusable = 0;
+        const auto observations = pTag->GetObservations();
+        for(const auto &obsKF : observations)
+        {
+            KeyFrame *pKF = obsKF.first;
+            if(!pKF)
+                continue;
+            if(pKF == mpCurrentKF || pKF->mnId >= mpCurrentKF->mnId)
+                continue;
+            if(pKF->isBad())
+                continue;
+            if(pKF->GetMap() != pMap)
+                continue;
+            if(localKFs.count(pKF))
+            {
+                ++nLocal;
+                continue;
+            }
+            const unsigned long gap = mpCurrentKF->mnId - pKF->mnId;
+            if(gap < static_cast<unsigned long>(mTagLoopParams.min_keyframe_gap))
+            {
+                ++nGap;
+                continue;
+            }
+            if(!HistoricalTagObservationUsable(pKF, obsKF.second))
+            {
+                ++nUnusable;
+                continue;
+            }
+            if(pKF->TrackedMapPoints(1) < mTagLoopParams.min_historical_kf_map_points)
+            {
+                ++nMps;
+                continue;
+            }
+            candidates.push_back(pKF);
+        }
+
+        KeyFrame *pBestHistKF = nullptr;
+        for(KeyFrame *pKF : candidates)
+        {
+            if(!pBestHistKF || pKF->mnId < pBestHistKF->mnId ||
+               (pKF->mnId == pBestHistKF->mnId &&
+                pKF->TrackedMapPoints(1) > pBestHistKF->TrackedMapPoints(1)))
+                pBestHistKF = pKF;
+        }
+        if(!pBestHistKF)
+        {
+            rejectExtra = "n_obs=" + std::to_string(observations.size()) +
+                          " n_local=" + std::to_string(nLocal) +
+                          " n_gap=" + std::to_string(nGap) +
+                          " n_mps=" + std::to_string(nMps) +
+                          " n_unusable=" + std::to_string(nUnusable) +
+                          " min_gap=" + std::to_string(mTagLoopParams.min_keyframe_gap) +
+                          " min_mps=" + std::to_string(mTagLoopParams.min_historical_kf_map_points);
+        }
+        return pBestHistKF;
+    };
+
+    // 遍历当前KF检测到的所有Tag
+    for(const auto &kv : associations)
+    {
+        const int tag_id = kv.first;
+        const KeyFrame::MapTagAssociation &assoc = kv.second;
+        tag::MapTagData *pTag = assoc.pMapTag;
+
+        // 跳过无效状态Tag
+        if(!pTag || pTag->IsBad() || !pTag->HasPose())
+        {
+            if(mTagLoopReferences.count(tag_id))
+                EraseTagLoopReference(tag_id, "bad_or_no_pose");
+            skipTag(tag_id, "bad_or_no_pose");
+            continue;
+        }
+
+        // 跳过无效状态Tag
+        const tag::MapTagState state = pTag->GetState();
+        if(state != tag::MapTagState::ACTIVE && state != tag::MapTagState::FIXED_ANCHOR)
+        {
+            skipTag(tag_id, "not_active",
+                    "state=" + std::to_string(static_cast<int>(state)));
+            continue;
+        }
+
+        // 跳过当前KF无效观测的Tag
+        if(!CurrentTagObservationUsable(mpCurrentKF, assoc))
+        {
+            skipTag(tag_id, "current_obs_unusable",
+                    "leftIdx=" + std::to_string(assoc.leftObservationIndex) +
+                    " rightIdx=" + std::to_string(assoc.rightObservationIndex));
+            continue;
+        }
+
+        // 检查回环冻结参考
+        auto refIt = mTagLoopReferences.find(tag_id);
+        bool hasFrozenRef = refIt != mTagLoopReferences.end();
+        if(hasFrozenRef &&
+           (!refIt->second.pHistoricalKF || refIt->second.pHistoricalKF->isBad() ||
+            refIt->second.pHistoricalKF->GetMap() != pMap))
+        {
+            EraseTagLoopReference(tag_id, "hist_kf_invalid");
+            refIt = mTagLoopReferences.find(tag_id);
+            hasFrozenRef = false;
+        }
+
+        // Tag 是否出现在当前局部地图。找到一帧即可
+        bool localContainsTag = false;
+        const auto observations = pTag->GetObservations();
+        for(const auto &obsKF : observations)
+        {
+            KeyFrame *pHistoricalKF = obsKF.first;
+            if(!pHistoricalKF || pHistoricalKF == mpCurrentKF)
+                continue;
+            if(localKFs.count(pHistoricalKF))
+            {
+                localContainsTag = true;
+                break;
+            }
+        }
+
+        KeyFrame *pHistKF = nullptr;
+        Sophus::SE3f frozenTwt;
+
+        // 若存在回环冻结参考，则直接使用冻结参考的KF和位姿
+        if(hasFrozenRef)
+        {
+            pHistKF = refIt->second.pHistoricalKF;
+            frozenTwt = refIt->second.frozenTwt;
+        }
+        
+        // 若不存在回环冻结参考，则需要进一步进行判断
+        else
+        {
+            KeyFrame *pLastObservedKF = findLastObservedKF(pTag); // 找到最近一次有效观测的KF
+            if(!pLastObservedKF)
+            {
+                skipTag(tag_id, "no_last_observation");
+                continue;
+            }
+            // 检查最近一次有效观测间隔
+            const unsigned long reobservationGap =
+                mpCurrentKF->mnId - pLastObservedKF->mnId;
+            if(reobservationGap <
+               // 若最近一次有效观测间隔小于最小最近一次有效观测间隔，则跳过
+               static_cast<unsigned long>(mTagLoopParams.min_reobservation_gap_kfs))
+            {
+                skipTag(tag_id, "reobservation_gap",
+                        "lastKF=" + std::to_string(pLastObservedKF->mnId) +
+                        " gap=" + std::to_string(reobservationGap) +
+                        " min=" + std::to_string(mTagLoopParams.min_reobservation_gap_kfs) +
+                        " in_local_map=" + std::to_string(localContainsTag ? 1 : 0));
+                continue;
+            }
+
+            // 若不存在历史Tag位姿，则跳过
+            if(!assoc.hasHistoricalTagPose)
+            {
+                skipTag(tag_id, "no_historical_pose",
+                        "hist_obs=" + std::to_string(assoc.historicalObservationCount));
+                continue;
+            }
+            // 若历史观测次数小于最小历史观测次数，则跳过
+            if(static_cast<int>(assoc.historicalObservationCount) <
+               mTagLoopParams.min_history_observations)
+            {
+                skipTag(tag_id, "min_history_obs",
+                        "hist_obs=" + std::to_string(assoc.historicalObservationCount) +
+                        " min=" + std::to_string(mTagLoopParams.min_history_observations));
+                continue;
+            }
+
+            // 选择最早的历史KF作为当前帧的回环帧
+            std::string rejectExtra;
+            pHistKF = selectEarliestHistKF(pTag, rejectExtra);
+            if(!pHistKF)
+            {
+                skipTag(tag_id, "no_qualified_historical_kf", rejectExtra);
+                continue;
+            }
+            // 使用未被污染的历史Tag pose作为回环冻结参考
+            frozenTwt = assoc.historicalTagPose;
+        }
+
+        // 估计Tag回环位姿
+        Sophus::SE3f TcwTag, TctLeft;
+        bool bStereoConsistent = false;
+        int nValidCameras = 0;
+        std::string poseFail;
+        if(!EstimateTagLoopPose(assoc, frozenTwt, TcwTag, TctLeft, bStereoConsistent,
+                                nValidCameras, &poseFail))
+        {
+            skipTag(tag_id, poseFail,
+                    "leftIdx=" + std::to_string(assoc.leftObservationIndex) +
+                    " rightIdx=" + std::to_string(assoc.rightObservationIndex) +
+                    " frozen=" + std::to_string(hasFrozenRef ? 1 : 0));
+            continue;
+        }
+
+        // 若不存在回环冻结参考（冻结pose计算完毕，需要进行冻结参考更新）
+        if(!hasFrozenRef)
+        {
+            TagLoopReference ref;
+            ref.frozenTwt = frozenTwt;
+            ref.pHistoricalKF = pHistKF;
+            ref.lastSeenKF = mpCurrentKF->mnId;
+            pHistKF->SetNotErase();
+            mTagLoopReferences[tag_id] = ref;
+            std::cout << "[TagLoopRef] KF=" << mpCurrentKF->mnId
+                      << " tag=" << tag_id
+                      << " action=freeze histKF=" << pHistKF->mnId
+                      << " lastSeen=" << mpCurrentKF->mnId
+                      << " in_local_map=" << (localContainsTag ? 1 : 0)
+                      << " Twt ";
+            PrintSE3Compact(frozenTwt);
+            logLiveDelta(frozenTwt, pTag);
+            std::cout << std::endl;
+        }
+        // 若存在回环冻结参考（直接使用冻结pose）
+        else
+        {
+            refIt->second.lastSeenKF = mpCurrentKF->mnId;
+            std::cout << "[TagLoopRef] KF=" << mpCurrentKF->mnId
+                      << " tag=" << tag_id
+                      << " action=reuse histKF=" << pHistKF->mnId
+                      << " in_local_map=" << (localContainsTag ? 1 : 0)
+                      << " lastSeen=" << mpCurrentKF->mnId;
+            logLiveDelta(frozenTwt, pTag);
+            std::cout << std::endl;
+        }
+
+        TagLoopEstimate est;
+        est.pTag = pTag;
+        est.pMatchedKF = pHistKF;
+        est.historicalTwt = frozenTwt;
+        est.Tct = TctLeft;
+        est.TcwTag = TcwTag;
+        est.stereoConsistent = bStereoConsistent;
+        est.nValidCameras = nValidCameras;
+        est.currentReproj = CurrentTagReprojectionError(mpCurrentKF, assoc);
+        est.frozen = hasFrozenRef;
+        est.inLocalMap = localContainsTag;
+        estimates.push_back(est);
+    }
+
+    if(!skipCounts.empty())
+        printSkipSummary();
+
+    const float maxT = mTagLoopParams.max_stereo_translation_error;
+    const float maxR = mTagLoopParams.max_stereo_rotation_error;
+
+    auto dumpPairs = [&](const std::vector<TagLoopEstimate> &groupA,
+                         const std::vector<TagLoopEstimate> &groupB,
+                         const char *src) {
+        const bool sameGroup = &groupA == &groupB;
+        for(size_t i = 0; i < groupA.size(); ++i)
+        {
+            if(!groupA[i].pTag)
+                continue;
+            const size_t jBegin = sameGroup ? i + 1 : 0;
+            for(size_t j = jBegin; j < groupB.size(); ++j)
+            {
+                if(!groupB[j].pTag)
+                    continue;
+                PrintTagLoopPair(mpCurrentKF->mnId,
+                                 groupA[i].pTag->Id(), groupB[j].pTag->Id(),
+                                 groupA[i].TcwTag, groupB[j].TcwTag,
+                                 maxT, maxR, src);
+            }
+        }
+    };
+    dumpPairs(estimates, estimates, "loop");
+
+    if(estimates.empty())
+    {
+        if(skipCounts.empty())
+            printSkipSummary();
+        if(mnTagLoopCoincidences > 0)
+        {
+            mnTagLoopNotFound++;
+            if(mnTagLoopNotFound >= 2)
+                ResetTagLoopState();
+        }
+        return false;
+    }
+
+    std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+              << " valid_tags=" << estimates.size();
+    for(const TagLoopEstimate &est : estimates)
+    {
+        const Sophus::SE3f dOrb = mpCurrentKF->GetPoseInverse() * est.TcwTag;
+        std::cout << " {id=" << est.pTag->Id()
+                  << " histKF=" << est.pMatchedKF->mnId
+                  << " cams=" << est.nValidCameras
+                  << " stereo=" << (est.stereoConsistent ? 1 : 0)
+                  << " frozen=" << (est.frozen ? 1 : 0)
+                  << " in_local_map=" << (est.inLocalMap ? 1 : 0)
+                  << " reproj=" << est.currentReproj
+                  << " dtrans_to_ORB=" << dOrb.translation().norm()
+                  << " dang_to_ORB=" << dOrb.so3().log().norm()
+                  << " TcwTag ";
+        PrintSE3Compact(est.TcwTag);
+        std::cout << "}";
+    }
+    std::cout << std::endl;
+
+    auto buildCluster = [&](int seed) {
+        std::vector<int> members;
+        members.reserve(estimates.size());
+        for(size_t j = 0; j < estimates.size(); ++j)
+        {
+            if(TagLoopPosesConsistent(estimates[seed].TcwTag, estimates[j].TcwTag, maxT, maxR))
+                members.push_back(static_cast<int>(j));
+        }
+        return members;
+    };
+
+    auto clusterStereoCount = [&](const std::vector<int> &members) {
+        int n = 0;
+        for(int idx : members)
+        {
+            if(estimates[idx].stereoConsistent)
+                ++n;
+        }
+        return n;
+    };
+    auto clusterCamSum = [&](const std::vector<int> &members) {
+        int n = 0;
+        for(int idx : members)
+            n += estimates[idx].nValidCameras;
+        return n;
+    };
+    auto clusterMinReproj = [&](const std::vector<int> &members) {
+        float best = 1e9f;
+        for(int idx : members)
+            best = std::min(best, estimates[idx].currentReproj);
+        return best;
+    };
+    auto clusterMinTagId = [&](const std::vector<int> &members) {
+        int bestId = estimates[members.front()].pTag->Id();
+        for(int idx : members)
+            bestId = std::min(bestId, estimates[idx].pTag->Id());
+        return bestId;
+    };
+
+    auto betterCluster = [&](const std::vector<int> &a, const std::vector<int> &b) {
+        if(a.size() != b.size())
+            return a.size() > b.size();
+        const int stereoA = clusterStereoCount(a);
+        const int stereoB = clusterStereoCount(b);
+        if(stereoA != stereoB)
+            return stereoA > stereoB;
+        const int camA = clusterCamSum(a);
+        const int camB = clusterCamSum(b);
+        if(camA != camB)
+            return camA > camB;
+        const float reprojA = clusterMinReproj(a);
+        const float reprojB = clusterMinReproj(b);
+        if(reprojA != reprojB)
+            return reprojA < reprojB;
+        return clusterMinTagId(a) < clusterMinTagId(b);
+    };
+
+    auto betterEstimate = [&](int i, int j) {
+        const TagLoopEstimate &a = estimates[i];
+        const TagLoopEstimate &b = estimates[j];
+        if(a.stereoConsistent != b.stereoConsistent)
+            return a.stereoConsistent && !b.stereoConsistent;
+        if(a.nValidCameras != b.nValidCameras)
+            return a.nValidCameras > b.nValidCameras;
+        if(a.currentReproj != b.currentReproj)
+            return a.currentReproj < b.currentReproj;
+        return a.pTag->Id() < b.pTag->Id();
+    };
+
+    // 根据不同Tag计算出当前相机pose的差异，筛选出多个计算当前相机pose差异小于指定阈值的Tag集合
+    std::vector<int> cluster = buildCluster(0);
+    for(size_t i = 1; i < estimates.size(); ++i)
+    {
+        std::vector<int> cand = buildCluster(static_cast<int>(i));
+        // 只选出一个最优的Tag集合
+        if(betterCluster(cand, cluster))
+            cluster = std::move(cand);
+    }
+    if(static_cast<int>(cluster.size()) < mTagLoopParams.min_consistent_tags)
+    {
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " reject cluster=" << cluster.size()
+                  << " < min_consistent_tags="
+                  << mTagLoopParams.min_consistent_tags << std::endl;
+        return false;
+    }
+
+    std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+              << " cluster=" << cluster.size()
+              << " stereo=" << clusterStereoCount(cluster)
+              << " cams=" << clusterCamSum(cluster)
+              << " tags=";
+    for(size_t i = 0; i < cluster.size(); ++i)
+    {
+        if(i)
+            std::cout << ",";
+        std::cout << estimates[cluster[i]].pTag->Id();
+    }
+    std::cout << std::endl;
+
+    int bestInCluster = cluster.front();
+    for(int idx : cluster)
+    {
+        if(betterEstimate(idx, bestInCluster))
+            bestInCluster = idx;
+    }
+    const TagLoopEstimate &best = estimates[bestInCluster];
+
+    // 转换为固定尺度的Sim3位姿，并检查Tag计算的Sim3位姿和回环前计算的漂移pose差异是否满足指定条件
+    const g2o::Sim3 gScwTag(best.TcwTag.unit_quaternion().cast<double>(),
+                            best.TcwTag.translation().cast<double>(), 1.0);
+    g2o::Sim3 gScwTag4DoF;
+    if(!ValidateTagLoop(gScwTag, gScwTag4DoF))
+    {
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " reject 4DoF tag=" << best.pTag->Id()
+                  << " histKF=" << best.pMatchedKF->mnId << std::endl;
+        return false;
+    }
+
+    // 判断本次Tag候选是否可靠
+    bool bAccept = false;
+    const char *acceptReason = "none";
+    const unsigned long lastCoinKFId =
+        mpTagLoopLastCurrentKF ? mpTagLoopLastCurrentKF->mnId : 0;
+    if(static_cast<int>(cluster.size()) >= 2) // 多个Tag给出一致的当前KF位姿
+    {
+        bAccept = true;
+        acceptReason = "multi_tag";
+    }
+    else if(best.stereoConsistent) // 左右目Tag计算的当前KF位姿一致
+    {
+        bAccept = true;
+        acceptReason = "stereo";
+    }
+    else // 单Tag、单相机时连续KF验证
+    {
+        if(mnTagLoopCoincidences > 0 && mpTagLoopLastCurrentKF)
+        {
+            const Sophus::SE3f TcwLast(
+                mg2oTagLoopLastScw.rotation().cast<float>(),
+                mg2oTagLoopLastScw.translation().cast<float>());
+            if(TagLoopPosesConsistent(best.TcwTag, TcwLast, maxT, maxR))
+            {
+                mnTagLoopCoincidences++;
+                if(mnTagLoopCoincidences >= 2)
+                {
+                    bAccept = true;
+                    acceptReason = "coincidence";
+                }
+                else
+                {
+                    acceptReason = "coincidence_wait";
+                }
+            }
+            else
+            {
+                mnTagLoopCoincidences = 1;
+                acceptReason = "coincidence_reset";
+            }
+        }
+        else
+        {
+            mnTagLoopCoincidences = 1;
+            acceptReason = "coincidence_start";
+        }
+    }
+
+    std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+              << " accept_check accept=" << (bAccept ? 1 : 0)
+              << " reason=" << acceptReason
+              << " tag=" << best.pTag->Id()
+              << " histKF=" << best.pMatchedKF->mnId
+              << " cluster=" << cluster.size()
+              << " stereo=" << (best.stereoConsistent ? 1 : 0)
+              << " coincidences=" << mnTagLoopCoincidences
+              << " lastKF=" << lastCoinKFId
+              << " t_cur=" << mpCurrentKF->mTimeStamp
+              << " t_hist=" << best.pMatchedKF->mTimeStamp
+              << " dtrans=" << (mpCurrentKF->GetPoseInverse() * best.TcwTag).translation().norm()
+              << " dang=" << (mpCurrentKF->GetPoseInverse() * best.TcwTag).so3().log().norm()
+              << std::endl;
+
+    // 保存本次Tag回环候选结果
+    if(mpTagLoopMatchedKF && mpTagLoopMatchedKF != best.pMatchedKF &&
+       mpTagLoopMatchedKF != mpCurrentKF)
+        mpTagLoopMatchedKF->SetErase();
+    best.pMatchedKF->SetNotErase();
+    mpTagLoopMatchedKF = best.pMatchedKF;
+    mpTagLoopLastCurrentKF = mpCurrentKF;
+    mg2oTagLoopLastScw = gScwTag4DoF;
+    mg2oTagLoopScw = gScwTag4DoF;
+    mTagLoopTwtHistory = best.historicalTwt;
+    mTagLoopTct = best.Tct;
+    mnTagLoopNotFound = 0;
+
+    if(!bAccept)
+    {
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " candidate tag=" << best.pTag->Id()
+                  << " histKF=" << best.pMatchedKF->mnId
+                  << " coincidences=" << mnTagLoopCoincidences
+                  << " cluster=" << cluster.size()
+                  << " stereo=" << (best.stereoConsistent ? 1 : 0)
+                  << std::endl;
+        return false;
+    }
+
+    // 提交回环前：当前 KF 多 Tag 4DoF pose-only（单顶点 yaw+xyz，两轮 Huber）。
+    // 组级剔除：每相机≥3 角点内点 / 左右合计≥6，且 Tag RMSE≤5px；至少 2 个内点 Tag 才写入 mg2oLoopScw。
+    // 失败则保留 coincidence 候选、不提交。
+    {
+        const auto constraints = BuildTagLoopPoseConstraints(mpCurrentKF);
+        // seed 来自触发 Tag 的 IPPE + ValidateTagLoop 零化 roll/pitch 后的 4DoF Sim3
+        const Sophus::SE3f seedTcw(
+            gScwTag4DoF.rotation().cast<float>(),
+            gScwTag4DoF.translation().cast<float>());
+        Sophus::SE3f refinedTcw = seedTcw;
+        Optimizer::TagLoopPoseOptStats stats;
+        const float cornerSigma = (mTagLocalBAParams.corner_sigma > 0.0f)
+                                      ? mTagLocalBAParams.corner_sigma
+                                      : 2.0f;
+        const bool refined = Optimizer::OptimizeTagLoopPose4DoF(
+            mpCurrentKF, constraints, seedTcw, refinedTcw, &stats, cornerSigma,
+            mTagLocalBAParams.factor_weight);
+
+        float dtrans = 0.0f;
+        float drot = 0.0f;
+        TagLoopPoseDelta(seedTcw, refinedTcw, dtrans, drot);
+
+        auto joinIds = [](const std::vector<int> &ids) {
+            std::ostringstream oss;
+            for(size_t i = 0; i < ids.size(); ++i)
+            {
+                if(i)
+                    oss << ",";
+                oss << ids[i];
+            }
+            return oss.str();
+        };
+
+        if(!refined)
+        {
+            std::cout << "[TagLoopPoseOpt]"
+                      << " KF=" << mpCurrentKF->mnId
+                      << " trigger=" << best.pTag->Id()
+                      << " status=rejected"
+                      << " reason=min_inlier_tags"
+                      << " input_tags=" << stats.inputTags
+                      << " inlier_tags=" << stats.inlierTags
+                      << " tags_outlier=" << joinIds(stats.outlierTagIds)
+                      << std::endl;
+            return false;
+        }
+
+        // 用多 Tag 优化后的 4DoF 位姿覆盖 seed，再写入 mg2oLoopScw
+        gScwTag4DoF = g2o::Sim3(refinedTcw.unit_quaternion().cast<double>(),
+                                refinedTcw.translation().cast<double>(), 1.0);
+        mg2oTagLoopLastScw = gScwTag4DoF;
+        mg2oTagLoopScw = gScwTag4DoF;
+
+        std::cout << "[TagLoopPoseOpt]"
+                  << " KF=" << mpCurrentKF->mnId
+                  << " trigger=" << best.pTag->Id()
+                  << " input_tags=" << stats.inputTags
+                  << " edges_L=" << stats.inputEdgesLeft
+                  << " edges_R=" << stats.inputEdgesRight
+                  << " inlier_tags=" << stats.inlierTags
+                  << " inlier_corners=" << stats.inlierCorners
+                  << " rmse_before=" << stats.rmseBefore
+                  << " rmse_after=" << stats.rmseAfter
+                  << " seed_to_refined_trans=" << dtrans
+                  << " seed_to_refined_rot=" << drot
+                  << " tags_inlier=" << joinIds(stats.inlierTagIds)
+                  << " tags_outlier=" << joinIds(stats.outlierTagIds)
+                  << " status=accepted"
+                  << std::endl;
+    }
+
+    // Drop unfinished BoW loop state. These pointers are only valid after a BoW
+    // assignment; they must not be dereferenced when still null/uninitialized.
+    if(mpLoopLastCurrentKF && mpLoopLastCurrentKF != mpCurrentKF)
+        mpLoopLastCurrentKF->SetErase();
+    mpLoopLastCurrentKF = nullptr;
+    if(mpLoopMatchedKF && mpLoopMatchedKF != best.pMatchedKF &&
+       mpLoopMatchedKF != mpCurrentKF)
+        mpLoopMatchedKF->SetErase();
+    mpLoopMatchedKF = nullptr;
+    mnLoopNumCoincidences = 0;
+    mvpLoopMatchedMPs.clear();
+    mvpLoopMPs.clear();
+    mnLoopNumNotFound = 0;
+
+    mbLoopDetected = true;
+    mbTagLoopDetected = true;
+    mnLoopTagId = best.pTag->Id();
+    mpLoopTag = best.pTag;
+    mpLoopMatchedKF = best.pMatchedKF;
+    mpLoopLastCurrentKF = mpCurrentKF;
+    mg2oLoopScw = gScwTag4DoF;
+    mg2oLoopSlw = gScwTag4DoF;
+    CollectTagLoopMapPoints(best.pMatchedKF, mvpLoopMPs);
+    mvpLoopMatchedMPs.clear();
+
+    const char *reason = "coincidence";
+    if(static_cast<int>(cluster.size()) >= 2)
+        reason = "multi_tag";
+    else if(best.stereoConsistent)
+        reason = "stereo";
+
+    std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+              << " valid loop confirmed"
+              << " tag=" << mnLoopTagId
+              << " histKF=" << mpLoopMatchedKF->mnId
+              << " t_cur=" << mpCurrentKF->mTimeStamp
+              << " t_hist=" << mpLoopMatchedKF->mTimeStamp
+              << " cluster=" << cluster.size()
+              << " stereo=" << (best.stereoConsistent ? 1 : 0)
+              << " cams=" << best.nValidCameras
+              << " reason=" << reason
+              << " dtrans=" << (mpCurrentKF->GetPoseInverse() * best.TcwTag).translation().norm()
+              << " dang=" << (mpCurrentKF->GetPoseInverse() * best.TcwTag).so3().log().norm()
+              << " mps=" << mvpLoopMPs.size() << std::endl;
+    return true;
 }
 
 bool LoopClosing::NewDetectCommonRegions()
@@ -340,8 +1684,20 @@ bool LoopClosing::NewDetectCommonRegions()
         mpLastMap = mpCurrentKF->GetMap();
     }
 
+    auto logTagDetectSkipped = [&](const char *reason) {
+        if(!mTagLoopParams.enable || !mpCurrentKF)
+            return;
+        if(mpCurrentKF->mTagFrameData.Empty())
+            return;
+        std::cout << "[TagLoop] KF " << mpCurrentKF->mnId
+                  << " skip_detect reason=" << reason
+                  << " detections=" << mpCurrentKF->mTagFrameData.Size()
+                  << std::endl;
+    };
+
     if(mpLastMap->IsInertial() && !mpLastMap->GetIniertialBA2())
     {
+        logTagDetectSkipped("imu_ba2_not_ready");
         mpKeyFrameDB->add(mpCurrentKF);
         mpCurrentKF->SetErase();
         return false;
@@ -349,7 +1705,7 @@ bool LoopClosing::NewDetectCommonRegions()
 
     if(mpTracker->mSensor == System::STEREO && mpLastMap->GetAllKeyFrames().size() < 5) //12
     {
-        // cout << "LoopClousure: Stereo KF inserted without check: " << mpCurrentKF->mnId << endl;
+        logTagDetectSkipped("map_too_small_stereo");
         mpKeyFrameDB->add(mpCurrentKF);
         mpCurrentKF->SetErase();
         return false;
@@ -357,7 +1713,7 @@ bool LoopClosing::NewDetectCommonRegions()
 
     if(mpLastMap->GetAllKeyFrames().size() < 12)
     {
-        // cout << "LoopClousure: Stereo KF inserted without check, map is small: " << mpCurrentKF->mnId << endl;
+        logTagDetectSkipped("map_too_small");
         mpKeyFrameDB->add(mpCurrentKF);
         mpCurrentKF->SetErase();
         return false;
@@ -412,6 +1768,8 @@ bool LoopClosing::NewDetectCommonRegions()
             {
                 mpLoopLastCurrentKF->SetErase();
                 mpLoopMatchedKF->SetErase();
+                mpLoopLastCurrentKF = nullptr;
+                mpLoopMatchedKF = nullptr;
                 mnLoopNumCoincidences = 0;
                 mvpLoopMatchedMPs.clear();
                 mvpLoopMPs.clear();
@@ -455,6 +1813,8 @@ bool LoopClosing::NewDetectCommonRegions()
             {
                 mpMergeLastCurrentKF->SetErase();
                 mpMergeMatchedKF->SetErase();
+                mpMergeLastCurrentKF = nullptr;
+                mpMergeMatchedKF = nullptr;
                 mnMergeNumCoincidences = 0;
                 mvpMergeMatchedMPs.clear();
                 mvpMergeMPs.clear();
@@ -469,6 +1829,9 @@ bool LoopClosing::NewDetectCommonRegions()
 
         double timeEstSim3 = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndEstSim3_1 - time_StartEstSim3_1).count();
 #endif
+
+    // 检测回环候选
+    DetectTagLoop();
 
     if(mbMergeDetected || mbLoopDetected)
     {
@@ -970,39 +2333,25 @@ int LoopClosing::FindMatchesByProjection(KeyFrame* pCurrentKF, KeyFrame* pMatche
 
 void LoopClosing::CorrectLoop()
 {
-    //cout << "Loop detected!" << endl;
-
-    // Send a stop signal to Local Mapping
-    // Avoid new keyframes are inserted while correcting the loop
-    mpLocalMapper->RequestStop();
-    mpLocalMapper->EmptyQueue(); // Proccess keyframes in the queue
-
-    // If a Global Bundle Adjustment is running, abort it
-    if(isRunningGBA())
+    ClearTagLoopReferences(mbTagLoopDetected ? "tag_loop_accept" : "bow_loop");
+    if(mbTagLoopDetected)
     {
-        cout << "Stoping Global Bundle Adjustment...";
-        unique_lock<mutex> lock(mMutexGBA);
-        mbStopGBA = true;
-
-        mnFullBAIdx++;
-
-        if(mpThreadGBA)
-        {
-            mpThreadGBA->detach();
-            delete mpThreadGBA;
-        }
-        cout << "  Done!!" << endl;
+        std::cout << "[KF " << mpCurrentKF->mnId << "] Loop confirmed type=tag"
+                  << " tag=" << mnLoopTagId;
+        if(mpLoopMatchedKF)
+            std::cout << " histKF=" << mpLoopMatchedKF->mnId
+                      << " t_cur=" << mpCurrentKF->mTimeStamp
+                      << " t_hist=" << mpLoopMatchedKF->mTimeStamp;
+        std::cout << std::endl;
+    }
+    else
+    {
+        std::cout << "[KF " << mpCurrentKF->mnId << "] Loop confirmed" << std::endl;
     }
 
-    // Wait until Local Mapping has effectively stopped
-    while(!mpLocalMapper->isStopped())
-    {
-        usleep(1000);
-    }
+    assert(!mpLocalMapper->HasPendingKeyFrames());
 
     // Ensure current keyframe is updated
-    //cout << "Start updating connections" << endl;
-    //assert(mpCurrentKF->GetMap()->CheckEssentialGraph());
     mpCurrentKF->UpdateConnections();
     //assert(mpCurrentKF->GetMap()->CheckEssentialGraph());
 
@@ -1111,6 +2460,56 @@ void LoopClosing::CorrectLoop()
             // Make sure connections are updated
             pKFi->UpdateConnections();
         }
+
+        if(mbTagLoopDetected)
+        {
+            const std::vector<Map::MapTagPtr> vpTags = pLoopMap->GetAllMapTags();
+            for(const Map::MapTagPtr &pTagPtr : vpTags)
+            {
+                tag::MapTagData *pTag = pTagPtr.get();
+                if(!pTag || pTag->IsBad() || !pTag->HasPose())
+                    continue;
+                if(pTag == mpLoopTag || pTag->IsFixed())
+                    continue;
+                if(pTag->mnCorrectedByKF == mpCurrentKF->mnId)
+                    continue;
+
+                KeyFrame *pRefKF = nullptr;
+                int bestScore = -1;
+                const auto tagObs = pTag->GetObservations();
+                for(const auto &obsKF : tagObs)
+                {
+                    KeyFrame *pKF = obsKF.first;
+                    if(!pKF || CorrectedSim3.count(pKF) == 0)
+                        continue;
+                    const int score = pKF->TrackedMapPoints(1);
+                    if(score > bestScore)
+                    {
+                        bestScore = score;
+                        pRefKF = pKF;
+                    }
+                }
+                if(!pRefKF)
+                    continue;
+
+                const g2o::Sim3 g2oCorrectedSiw = CorrectedSim3[pRefKF];
+                const g2o::Sim3 g2oSiw = NonCorrectedSim3[pRefKF];
+                const g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();
+
+                const Sophus::SE3f TwtOld = pTag->GetPose();
+                const Eigen::Matrix3f Rcor =
+                    (g2oCorrectedSiw.rotation().inverse() * g2oSiw.rotation())
+                        .toRotationMatrix()
+                        .cast<float>();
+                const Eigen::Matrix3f Rnew = Rcor * TwtOld.rotationMatrix();
+                const Eigen::Vector3f tnew =
+                    g2oCorrectedSwi.map(g2oSiw.map(TwtOld.translation().cast<double>())).cast<float>();
+                pTag->SetPose(Sophus::SE3f(Rnew, tnew));
+                pTag->mnCorrectedByKF = mpCurrentKF->mnId;
+                pTag->mnCorrectedReference = pRefKF->mnId;
+            }
+        }
+
         // TODO Check this index increasement
         mpAtlas->GetCurrentMap()->IncreaseChangeIndex();
 
@@ -1162,6 +2561,9 @@ void LoopClosing::CorrectLoop()
         }
     }
 
+    if(mbTagLoopDetected && mpCurrentKF && mpLoopMatchedKF)
+        LoopConnections[mpCurrentKF].insert(mpLoopMatchedKF);
+
     // Optimize graph
     bool bFixedScale = mbFixScale;
     // TODO CHECK; Solo para el monocular inertial
@@ -1177,12 +2579,14 @@ void LoopClosing::CorrectLoop()
     //cout << "Optimize essential graph" << endl;
     if(pLoopMap->IsInertial() && pLoopMap->isImuInitialized())
     {
-        Optimizer::OptimizeEssentialGraph4DoF(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections);
+        Optimizer::OptimizeEssentialGraph4DoF(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections,
+                                              mbTagLoopDetected ? mpLoopTag : nullptr);
     }
     else
     {
         //cout << "Loop -> Scale correction: " << mg2oLoopScw.scale() << endl;
-        Optimizer::OptimizeEssentialGraph(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, bFixedScale);
+        Optimizer::OptimizeEssentialGraph(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, bFixedScale,
+                                          mbTagLoopDetected ? mpLoopTag : nullptr);
     }
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndOpt = std::chrono::steady_clock::now();
@@ -1197,21 +2601,24 @@ void LoopClosing::CorrectLoop()
     mpLoopMatchedKF->AddLoopEdge(mpCurrentKF);
     mpCurrentKF->AddLoopEdge(mpLoopMatchedKF);
 
-    // Launch a new thread to perform Global Bundle Adjustment (Only if few keyframes, if not it would take too much time)
-    if(!pLoopMap->isImuInitialized() || (pLoopMap->KeyFramesInMap()<200 && mpAtlas->CountMaps()==1))
+    std::cout << "[KF " << mpCurrentKF->mnId << "] CorrectLoop finished" << std::endl;
+    std::cout << "[KF " << mpCurrentKF->mnId << "] EssentialGraph finished" << std::endl;
+
+    // Run GBA unless the inertial system has multiple maps.
+    // In particular, an initialized single-map system still runs GBA even
+    // when the map contains 200 or more keyframes.
+    if(!pLoopMap->isImuInitialized() || mpAtlas->CountMaps()==1)
     {
+        std::cout << "[KF " << mpCurrentKF->mnId << "] GBA begin" << std::endl;
         mbRunningGBA = true;
         mbFinishedGBA = false;
         mbStopGBA = false;
         mnCorrectionGBA = mnNumCorrection;
-
-        mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment, this, pLoopMap, mpCurrentKF->mnId);
+        RunGlobalBundleAdjustment(pLoopMap, mpCurrentKF->mnId);
+        std::cout << "[KF " << mpCurrentKF->mnId << "] GBA map update finished" << std::endl;
     }
 
-    // Loop closed. Release Local Mapping.
-    mpLocalMapper->Release();    
-
-    mLastLoopKFid = mpCurrentKF->mnId; //TODO old varible, it is not use in the new algorithm
+    mLastLoopKFid = mpCurrentKF->mnId;
 }
 
 void LoopClosing::MergeLocal()
@@ -1225,40 +2632,10 @@ void LoopClosing::MergeLocal()
     vector<KeyFrame*> vpLocalCurrentWindowKFs;
     vector<KeyFrame*> vpMergeConnectedKFs;
 
-    // Flag that is true only when we stopped a running BA, in this case we need relaunch at the end of the merge
     bool bRelaunchBA = false;
 
-    //Verbose::PrintMess("MERGE-VISUAL: Check Full Bundle Adjustment", Verbose::VERBOSITY_DEBUG);
-    // If a Global Bundle Adjustment is running, abort it
-    if(isRunningGBA())
-    {
-        unique_lock<mutex> lock(mMutexGBA);
-        mbStopGBA = true;
+    assert(!mpLocalMapper->HasPendingKeyFrames());
 
-        mnFullBAIdx++;
-
-        if(mpThreadGBA)
-        {
-            mpThreadGBA->detach();
-            delete mpThreadGBA;
-        }
-        bRelaunchBA = true;
-    }
-
-    //Verbose::PrintMess("MERGE-VISUAL: Request Stop Local Mapping", Verbose::VERBOSITY_DEBUG);
-    //cout << "Request Stop Local Mapping" << endl;
-    mpLocalMapper->RequestStop();
-    // Wait until Local Mapping has effectively stopped
-    while(!mpLocalMapper->isStopped())
-    {
-        usleep(1000);
-    }
-    //cout << "Local Map stopped" << endl;
-
-    mpLocalMapper->EmptyQueue();
-
-    // Merge map will become in the new active map with the local window of KFs and MPs from the current map.
-    // Later, the elements of the current map will be transform to the new active map reference, in order to keep real time tracking
     Map* pCurrentMap = mpCurrentKF->GetMap();
     Map* pMergeMap = mpMergeMatchedKF->GetMap();
 
@@ -1637,9 +3014,6 @@ void LoopClosing::MergeLocal()
 #endif
     //std::cout << "[Merge]: Welding bundle adjustment finished" << std::endl;
 
-    // Loop closed. Release Local Mapping.
-    mpLocalMapper->Release();
-
     //Update the non critical area from the current map to the merged map
     vector<KeyFrame*> vpCurrentMapKFs = pCurrentMap->GetAllKeyFrames();
     vector<MapPoint*> vpCurrentMapMPs = pCurrentMap->GetAllMapPoints();
@@ -1706,13 +3080,6 @@ void LoopClosing::MergeLocal()
             }
         }
 
-        mpLocalMapper->RequestStop();
-        // Wait until Local Mapping has effectively stopped
-        while(!mpLocalMapper->isStopped())
-        {
-            usleep(1000);
-        }
-
         // Optimize graph (and update the loop position for each element form the begining to the end)
         if(mpTracker->mSensor != System::MONOCULAR)
         {
@@ -1760,15 +3127,14 @@ void LoopClosing::MergeLocal()
 #endif
 
 
-    mpLocalMapper->Release();
-
-    if(bRelaunchBA && (!pCurrentMap->isImuInitialized() || (pCurrentMap->KeyFramesInMap()<200 && mpAtlas->CountMaps()==1)))
+    if(bRelaunchBA && (!pCurrentMap->isImuInitialized() || mpAtlas->CountMaps()==1))
     {
-        // Launch a new thread to perform Global Bundle Adjustment
+        std::cout << "[KF " << mpCurrentKF->mnId << "] GBA begin" << std::endl;
         mbRunningGBA = true;
         mbFinishedGBA = false;
         mbStopGBA = false;
-        mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment,this, pMergeMap, mpCurrentKF->mnId);
+        RunGlobalBundleAdjustment(pMergeMap, mpCurrentKF->mnId);
+        std::cout << "[KF " << mpCurrentKF->mnId << "] GBA map update finished" << std::endl;
     }
 
     mpMergeMatchedKF->AddMergeEdge(mpCurrentKF);
@@ -1798,35 +3164,7 @@ void LoopClosing::MergeLocal2()
     KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;
     // NonCorrectedSim3[mpCurrentKF]=mg2oLoopScw;
 
-    // Flag that is true only when we stopped a running BA, in this case we need relaunch at the end of the merge
-    bool bRelaunchBA = false;
-
-    //cout << "Check Full Bundle Adjustment" << endl;
-    // If a Global Bundle Adjustment is running, abort it
-    if(isRunningGBA())
-    {
-        unique_lock<mutex> lock(mMutexGBA);
-        mbStopGBA = true;
-
-        mnFullBAIdx++;
-
-        if(mpThreadGBA)
-        {
-            mpThreadGBA->detach();
-            delete mpThreadGBA;
-        }
-        bRelaunchBA = true;
-    }
-
-
-    //cout << "Request Stop Local Mapping" << endl;
-    mpLocalMapper->RequestStop();
-    // Wait until Local Mapping has effectively stopped
-    while(!mpLocalMapper->isStopped())
-    {
-        usleep(1000);
-    }
-    //cout << "Local Map stopped" << endl;
+    assert(!mpLocalMapper->HasPendingKeyFrames());
 
     Map* pCurrentMap = mpCurrentKF->GetMap();
     Map* pMergeMap = mpMergeMatchedKF->GetMap();
@@ -1836,10 +3174,6 @@ void LoopClosing::MergeLocal2()
         Sophus::SE3f T_on(mSold_new.rotation().cast<float>(), mSold_new.translation().cast<float>());
 
         unique_lock<mutex> lock(mpAtlas->GetCurrentMap()->mMutexMapUpdate);
-
-        //cout << "KFs before empty: " << mpAtlas->GetCurrentMap()->KeyFramesInMap() << endl;
-        mpLocalMapper->EmptyQueue();
-        //cout << "KFs after empty: " << mpAtlas->GetCurrentMap()->KeyFramesInMap() << endl;
 
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
         //cout << "updating active map to merge reference" << endl;
@@ -2038,7 +3372,6 @@ void LoopClosing::MergeLocal2()
 
     // TODO Check: If new map is too small, we suppose that not informaiton can be propagated from new to old map
     if (numKFnew<10){
-        mpLocalMapper->Release();
         return;
     }
 
@@ -2056,10 +3389,6 @@ void LoopClosing::MergeLocal2()
     /*good = pCurrentMap->CheckEssentialGraph();
     if(!good)
         cout << "BAD ESSENTIAL GRAPH 6!!" << endl;*/
-
-    // Release Local Mapping.
-    mpLocalMapper->Release();
-
 
     return;
 }
@@ -2199,41 +3528,33 @@ void LoopClosing::SearchAndFuse(const vector<KeyFrame*> &vConectedKFs, vector<Ma
 
 
 
-void LoopClosing::RequestReset()
+void LoopClosing::ResetSynchronously()
 {
     {
         unique_lock<mutex> lock(mMutexReset);
         mbResetRequested = true;
     }
-
-    while(1)
-    {
-        {
-        unique_lock<mutex> lock2(mMutexReset);
-        if(!mbResetRequested)
-            break;
-        }
-        usleep(5000);
-    }
+    ResetIfRequested();
 }
 
-void LoopClosing::RequestResetActiveMap(Map *pMap)
+void LoopClosing::ResetActiveMapSynchronously(Map *pMap)
 {
     {
         unique_lock<mutex> lock(mMutexReset);
         mbResetActiveMapRequested = true;
         mpMapToReset = pMap;
     }
+    ResetIfRequested();
+}
 
-    while(1)
-    {
-        {
-            unique_lock<mutex> lock2(mMutexReset);
-            if(!mbResetActiveMapRequested)
-                break;
-        }
-        usleep(3000);
-    }
+void LoopClosing::RequestReset()
+{
+    ResetSynchronously();
+}
+
+void LoopClosing::RequestResetActiveMap(Map *pMap)
+{
+    ResetActiveMapSynchronously(pMap);
 }
 
 void LoopClosing::ResetIfRequested()
@@ -2246,6 +3567,8 @@ void LoopClosing::ResetIfRequested()
         mLastLoopKFid=0;  //TODO old variable, it is not use in the new algorithm
         mbResetRequested=false;
         mbResetActiveMapRequested = false;
+        ResetTagLoopState();
+        ClearTagLoopReferences("reset");
     }
     else if(mbResetActiveMapRequested)
     {
@@ -2263,6 +3586,8 @@ void LoopClosing::ResetIfRequested()
 
         mLastLoopKFid=mpAtlas->GetLastInitKFid(); //TODO old variable, it is not use in the new algorithm
         mbResetActiveMapRequested=false;
+        ResetTagLoopState();
+        ClearTagLoopReferences("reset_active_map");
 
     }
 }
@@ -2285,7 +3610,14 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
     if(!bImuInit)
         Optimizer::GlobalBundleAdjustemnt(pActiveMap,10,&mbStopGBA,nLoopKF,false);
     else
-        Optimizer::FullInertialBA(pActiveMap,7,false,nLoopKF,&mbStopGBA);
+    {
+        const tag::TagLocalBAParams gbaTagParams =
+            (mbTagLoopDetected && mTagLocalBAParams.enable) ? mTagLocalBAParams
+                                                            : tag::TagLocalBAParams();
+        const int fixedLoopTagId = mbTagLoopDetected ? mnLoopTagId : -1;
+        Optimizer::FullInertialBA(pActiveMap,7,false,nLoopKF,&mbStopGBA,false,1e2,1e6,NULL,NULL,
+                                  gbaTagParams, fixedLoopTagId);
+    }
 
 #ifdef REGISTER_TIMES
     std::chrono::steady_clock::time_point time_EndGBA = std::chrono::steady_clock::now();
@@ -2299,17 +3631,9 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
     }
 #endif
 
-    int idx =  mnFullBAIdx;
-    // Optimizer::GlobalBundleAdjustemnt(mpMap,10,&mbStopGBA,nLoopKF,false);
-
     // Update all MapPoints and KeyFrames
-    // Local Mapping was active during BA, that means that there might be new keyframes
-    // not included in the Global BA and they are not consistent with the updated map.
-    // We need to propagate the correction through the spanning tree
     {
         unique_lock<mutex> lock(mMutexGBA);
-        if(idx!=mnFullBAIdx)
-            return;
 
         if(!bImuInit && pActiveMap->isImuInitialized())
             return;
@@ -2318,14 +3642,7 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
         {
             Verbose::PrintMess("Global Bundle Adjustment finished", Verbose::VERBOSITY_NORMAL);
             Verbose::PrintMess("Updating map ...", Verbose::VERBOSITY_NORMAL);
-
-            mpLocalMapper->RequestStop();
-            // Wait until Local Mapping has effectively stopped
-
-            while(!mpLocalMapper->isStopped() && !mpLocalMapper->isFinished())
-            {
-                usleep(1000);
-            }
+            ClearTagLoopReferences("gba");
 
             // Get Map Mutex
             unique_lock<mutex> lock(pActiveMap->mMutexMapUpdate);
@@ -2487,13 +3804,33 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
                 }
             }
 
+            // 选择参考帧，回环global BA后更新Tag位姿
+            const std::vector<Map::MapTagPtr> vpTags = pActiveMap->GetAllMapTags();
+            for(const Map::MapTagPtr &pTagPtr : vpTags)
+            {
+                tag::MapTagData *pTag = pTagPtr.get();
+                if(!pTag || pTag->IsBad() || !pTag->HasPose())
+                    continue;
+                if(mbTagLoopDetected && (pTag == mpLoopTag || pTag->Id() == mnLoopTagId))
+                    continue;
+                if(pTag->IsFixed())
+                    continue;
+
+                if(pTag->mnBAGlobalForKF == nLoopKF)
+                {
+                    pTag->SetPose(pTag->mTwtGBA);
+                    continue;
+                }
+
+                KeyFrame *pRefKF = pTag->SelectReferenceKeyFrame();
+                if(!pRefKF || pRefKF->isBad() || pRefKF->mnBAGlobalForKF != nLoopKF)
+                    continue;
+                const Sophus::SE3f TwtOld = pTag->GetPose();
+                pTag->SetPose(pRefKF->GetPoseInverse() * pRefKF->mTcwBefGBA * TwtOld);
+            }
+
             pActiveMap->InformNewBigChange();
             pActiveMap->IncreaseChangeIndex();
-
-            // TODO Check this update
-            // mpTracker->UpdateFrameIMU(1.0f, mpTracker->GetLastKeyFrame()->GetImuBias(), mpTracker->GetLastKeyFrame());
-
-            mpLocalMapper->Release();
 
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndUpdateMap = std::chrono::steady_clock::now();
